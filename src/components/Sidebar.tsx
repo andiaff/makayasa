@@ -118,7 +118,7 @@ export default function Sidebar({
               </div>
               <div className={`transition-opacity duration-200 ${isCollapsed ? 'lg:hidden' : 'block'}`}>
                 <h1 className="text-white font-bold font-sans text-sm leading-tight tracking-tight uppercase">{config.brandName || 'Makayasa Jember'}</h1>
-                <p className="text-[10px] text-amber-500 font-extrabold tracking-widest uppercase">{config.brandSubtitle || 'Komandan'}</p>
+                <p className="text-[10px] text-amber-500 font-extrabold tracking-widest uppercase">{loggedInSalesName ? 'Salesman' : (config.brandSubtitle || 'Komandan')}</p>
               </div>
             </div>
 
@@ -153,7 +153,7 @@ export default function Sidebar({
         {/* Menu Options Scrollable */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1 custom-scrollbar">
           <div className={`text-[9px] uppercase font-black tracking-widest text-slate-500 px-3 mb-2 transition-opacity duration-200 ${isCollapsed ? 'lg:hidden' : 'block'}`}>
-            {loggedInSalesName ? '7 Menu Utama Sales' : '16 Menu Utama Komandan'}
+            {loggedInSalesName ? '7 Menu Utama Salesman' : '16 Menu Utama Komandan'}
           </div>
           
           {menuItems.map((item) => {
@@ -220,7 +220,7 @@ export default function Sidebar({
             <div className={`flex-1 min-w-0 transition-opacity duration-200 ${isCollapsed ? 'lg:hidden' : 'block'}`}>
               <p className="text-xs font-black text-white truncate">{ownerName}</p>
               <p className="text-[10px] text-slate-500 truncate">
-                {loggedInSalesName ? 'Sales Lapangan' : (config.ownerRole || 'Komandan Perusahaan')}
+                {loggedInSalesName ? 'Salesman' : (config.ownerRole || 'Komandan Perusahaan')}
               </p>
             </div>
           </div>

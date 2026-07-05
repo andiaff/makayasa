@@ -1101,7 +1101,11 @@ export default function App() {
       12: 'Manajemen Stok & Logistik Sales',
       13: 'Manajemen & Pengawasan Mitra Freelance'
     };
-    return titles[activeMenu] || 'Command Center';
+    const title = titles[activeMenu] || 'Command Center';
+    if (loggedInSalesName) {
+      return title.replace(/Komandan/gi, 'Salesman');
+    }
+    return title;
   };
 
   // Guard page for unauthenticated viewers
