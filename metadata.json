@@ -1,0 +1,6 @@
+{
+  "name": "Makayasa Komandan Dashboard",
+  "description": "Aplikasi real-time owner monitoring kinerja sales, omset, penjualan rokok Makayasa, kunjungan toko, dan leaderboard terintegrasi Google Sheets & AppScript.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

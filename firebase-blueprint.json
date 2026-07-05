@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "sales_deposits": {
+      "title": "Setoran Sales",
+      "description": "Data setoran harian dari masing-masing sales",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggalSetor": { "type": "string" },
+        "salesName": { "type": "string" },
+        "tanggalMulaiPeriode": { "type": "string" },
+        "tanggalSelesaiPeriode": { "type": "string" },
+        "qtyPacksInPeriod": { "type": "number" },
+        "totalOmsetInPeriod": { "type": "number" },
+        "jumlahDisetor": { "type": "number" },
+        "selisihSetoran": { "type": "number" },
+        "statusSetoran": { "type": "string", "enum": ["Lunas", "Kurang Setor", "Lebih Setor"] },
+        "keterangan": { "type": "string" },
+        "archived": { "type": "boolean" }
+      },
+      "required": ["id", "tanggalSetor", "salesName", "tanggalMulaiPeriode", "tanggalSelesaiPeriode", "qtyPacksInPeriod", "totalOmsetInPeriod", "jumlahDisetor", "selisihSetoran", "statusSetoran"]
+    },
+    "expenses": {
+      "title": "Beban Operasional",
+      "description": "Data pengeluaran atau beban operasional",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "kategori": { "type": "string", "enum": ["Marketing", "Transfer Pabrik", "Operasional", "Gaji & Komisi", "Sewa & Logistik", "Lainnya"] },
+        "nominal": { "type": "number" },
+        "keterangan": { "type": "string" }
+      },
+      "required": ["id", "tanggal", "kategori", "nominal", "keterangan"]
+    },
+    "freelance_records": {
+      "title": "Kinerja Freelance",
+      "description": "Data presensi dan aktivitas harian tim freelance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggalAmbil": { "type": "string" },
+        "namaFreelance": { "type": "string" },
+        "qtyPacks": { "type": "number" },
+        "pricePerPack": { "type": "number" },
+        "totalOmset": { "type": "number" },
+        "statusPembayaran": { "type": "string", "enum": ["Belum Bayar", "Cicil", "Lunas"] },
+        "jumlahDibayar": { "type": "number" },
+        "kurangBayar": { "type": "number" },
+        "keterangan": { "type": "string" },
+        "potongStokGudang": { "type": "boolean" },
+        "returPacks": { "type": "number" },
+        "tanggalLunas": { "type": "string" },
+        "archived": { "type": "boolean" }
+      },
+      "required": ["id", "tanggalAmbil", "namaFreelance", "qtyPacks", "pricePerPack", "totalOmset", "statusPembayaran", "jumlahDibayar", "kurangBayar"]
+    },
+    "stok_gudang": {
+      "title": "Stok Gudang dan Sales",
+      "description": "Catatan transaksi keluar masuk stok di gudang utama maupun sales",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "tipe": { "type": "string", "enum": ["Masuk", "Keluar"] },
+        "sumberTujuan": { "type": "string" },
+        "jumlah": { "type": "number" },
+        "keterangan": { "type": "string" },
+        "sumberInput": { "type": "string", "enum": ["Aplikasi", "Spreadsheet"] },
+        "hanyaSales": { "type": "boolean" },
+        "salesName": { "type": "string" },
+        "isReversed": { "type": "boolean" },
+        "reversedAt": { "type": "string" }
+      },
+      "required": ["id", "tanggal", "tipe", "sumberTujuan", "jumlah", "keterangan", "sumberInput"]
+    },
+    "owner_config": {
+      "title": "Pengaturan Owner",
+      "description": "Konfigurasi global sistem yang disinkronkan",
+      "type": "object",
+      "properties": {
+        "spreadsheetUrl": { "type": "string" },
+        "appScriptUrl": { "type": "string" },
+        "pricePerPack": { "type": "number" },
+        "mode": { "type": "string", "enum": ["live", "demo"] },
+        "brandName": { "type": "string" },
+        "brandSubtitle": { "type": "string" },
+        "brandLogoInitials": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "ownerRole": { "type": "string" },
+        "ownerInitials": { "type": "string" },
+        "loginUsername": { "type": "string" },
+        "loginPassword": { "type": "string" }
+      },
+      "required": ["pricePerPack", "mode"]
+    }
+  },
+  "firestore": {
+    "sales_deposits": {
+      "schema": "sales_deposits",
+      "description": "Koleksi setoran sales"
+    },
+    "expenses": {
+      "schema": "expenses",
+      "description": "Koleksi beban operasional"
+    },
+    "freelance_records": {
+      "schema": "freelance_records",
+      "description": "Koleksi kehadiran freelance"
+    },
+    "stok_gudang": {
+      "schema": "stok_gudang",
+      "description": "Koleksi pencatatan stok barang"
+    },
+    "owner_config": {
+      "schema": "owner_config",
+      "description": "Koleksi setelan konfigurasi sistem"
+    }
+  }
+}

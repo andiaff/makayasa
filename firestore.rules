@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common Validation Helpers
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function isStringWithSize(val, max) {
+      return val is string && val.size() <= max;
+    }
+    
+    function isNumberWithLimit(val, max) {
+      return val is number && val >= 0 && val <= max;
+    }
+
+    // 1. Sales Deposits Validation
+    function isValidSalesDeposit(data) {
+      return data.keys().hasAll(['id', 'tanggalSetor', 'salesName', 'tanggalMulaiPeriode', 'tanggalSelesaiPeriode', 'qtyPacksInPeriod', 'totalOmsetInPeriod', 'jumlahDisetor', 'selisihSetoran', 'statusSetoran'])
+        && isStringWithSize(data.id, 128)
+        && isStringWithSize(data.tanggalSetor, 128)
+        && isStringWithSize(data.salesName, 128)
+        && isStringWithSize(data.tanggalMulaiPeriode, 128)
+        && isStringWithSize(data.tanggalSelesaiPeriode, 128)
+        && isNumberWithLimit(data.qtyPacksInPeriod, 1000000)
+        && data.totalOmsetInPeriod is number
+        && data.jumlahDisetor is number
+        && data.selisihSetoran is number
+        && (data.statusSetoran == 'Lunas' || data.statusSetoran == 'Kurang Setor' || data.statusSetoran == 'Lebih Setor')
+        && (!data.keys().hasAll(['keterangan']) || isStringWithSize(data.keterangan, 10000))
+        && (!data.keys().hasAll(['archived']) || data.archived is bool);
+    }
+
+    match /sales_deposits/{depositId} {
+      allow read: if true;
+      allow create, update: if isValidSalesDeposit(incoming());
+      allow delete: if true;
+    }
+
+    // 2. Expenses Validation
+    function isValidExpense(data) {
+      return data.keys().hasAll(['id', 'tanggal', 'kategori', 'nominal', 'keterangan'])
+        && isStringWithSize(data.id, 128)
+        && isStringWithSize(data.tanggal, 128)
+        && (data.kategori == 'Marketing' || data.kategori == 'Transfer Pabrik' || data.kategori == 'Operasional' || data.kategori == 'Gaji & Komisi' || data.kategori == 'Sewa & Logistik' || data.kategori == 'Lainnya')
+        && data.nominal is number
+        && isStringWithSize(data.keterangan, 10000);
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if true;
+      allow create, update: if isValidExpense(incoming());
+      allow delete: if true;
+    }
+
+    // 3. Freelance Records Validation
+    function isValidFreelanceRecord(data) {
+      return data.keys().hasAll(['id', 'tanggalAmbil', 'namaFreelance', 'qtyPacks', 'pricePerPack', 'totalOmset', 'statusPembayaran', 'jumlahDibayar', 'kurangBayar'])
+        && isStringWithSize(data.id, 128)
+        && isStringWithSize(data.tanggalAmbil, 128)
+        && isStringWithSize(data.namaFreelance, 128)
+        && isNumberWithLimit(data.qtyPacks, 1000000)
+        && isNumberWithLimit(data.pricePerPack, 1000000)
+        && data.totalOmset is number
+        && (data.statusPembayaran == 'Belum Bayar' || data.statusPembayaran == 'Cicil' || data.statusPembayaran == 'Lunas')
+        && data.jumlahDibayar is number
+        && data.kurangBayar is number
+        && (!data.keys().hasAll(['potongStokGudang']) || data.potongStokGudang is bool)
+        && (!data.keys().hasAll(['keterangan']) || isStringWithSize(data.keterangan, 10000))
+        && (!data.keys().hasAll(['returPacks']) || data.returPacks is number)
+        && (!data.keys().hasAll(['tanggalLunas']) || isStringWithSize(data.tanggalLunas, 128))
+        && (!data.keys().hasAll(['archived']) || data.archived is bool);
+    }
+
+    match /freelance_records/{recordId} {
+      allow read: if true;
+      allow create, update: if isValidFreelanceRecord(incoming());
+      allow delete: if true;
+    }
+
+    // 4. Stok Gudang Validation
+    function isValidStokGudang(data) {
+      return data.keys().hasAll(['id', 'tanggal', 'tipe', 'sumberTujuan', 'jumlah'])
+        && isStringWithSize(data.id, 128)
+        && isStringWithSize(data.tanggal, 128)
+        && (data.tipe == 'Masuk' || data.tipe == 'Keluar')
+        && isStringWithSize(data.sumberTujuan, 128)
+        && isNumberWithLimit(data.jumlah, 1000000)
+        && (!data.keys().hasAll(['keterangan']) || isStringWithSize(data.keterangan, 5000))
+        && (!data.keys().hasAll(['sumberInput']) || (data.sumberInput == 'Aplikasi' || data.sumberInput == 'Spreadsheet'))
+        && (!data.keys().hasAll(['hanyaSales']) || data.hanyaSales is bool)
+        && (!data.keys().hasAll(['salesName']) || isStringWithSize(data.salesName, 128))
+        && (!data.keys().hasAll(['isReversed']) || data.isReversed is bool)
+        && (!data.keys().hasAll(['reversedAt']) || isStringWithSize(data.reversedAt, 128));
+    }
+
+    match /stok_gudang/{stokId} {
+      allow read: if true;
+      allow create, update: if isValidStokGudang(incoming());
+      allow delete: if true;
+    }
+
+    // 5. Owner Config Validation
+    function isValidOwnerConfig(data) {
+      return (!data.keys().hasAll(['pricePerPack']) || (data.pricePerPack is number || data.pricePerPack is string))
+        && (!data.keys().hasAll(['mode']) || (data.mode == 'live' || data.mode == 'demo'));
+    }
+
+    match /owner_config/{configId} {
+      allow read: if true;
+      allow create, update: if isValidOwnerConfig(incoming());
+      allow delete: if true;
+    }
+  }
+}
