@@ -57,18 +57,48 @@ export default function Sidebar({
 }: SidebarProps) {
   // Define the 15 Menu items precisely matching owner demands
   const allMenuItems = [
-    { id: 1, name: 'Dashboard Utama', desc: 'Ringkasan performa bisnis', icon: LayoutDashboard },
-    { id: 2, name: 'Penjualan Sales', desc: 'Kinerja volume & omset sales', icon: TrendingUp },
-    { id: 3, name: 'Kunjungan Sales', desc: 'Rasio sukses & status kunjungan', icon: ClipboardCheck },
-    { id: 4, name: 'Database Toko', desc: 'Pemetaan toko & loyalitas', icon: Store },
+    { 
+      id: 1, 
+      name: loggedInSalesName ? 'Dashboard Saya' : 'Dashboard Utama', 
+      desc: loggedInSalesName ? 'Ringkasan performa penjualan Anda' : 'Ringkasan performa bisnis', 
+      icon: LayoutDashboard 
+    },
+    { 
+      id: 2, 
+      name: loggedInSalesName ? 'Penjualan Saya' : 'Penjualan Sales', 
+      desc: loggedInSalesName ? 'Kinerja volume & omset pribadi' : 'Kinerja volume & omset sales', 
+      icon: TrendingUp 
+    },
+    { 
+      id: 3, 
+      name: loggedInSalesName ? 'Kunjungan Saya' : 'Kunjungan Sales', 
+      desc: loggedInSalesName ? 'Rasio sukses kunjungan lapangan Anda' : 'Rasio sukses & status kunjungan', 
+      icon: ClipboardCheck 
+    },
+    { 
+      id: 4, 
+      name: 'Database Toko', 
+      desc: loggedInSalesName ? 'Pemetaan toko & loyalitas pelanggan' : 'Pemetaan toko & loyalitas', 
+      icon: Store 
+    },
     { id: 16, name: 'Wilayah / Area', desc: 'Pemetaan 31 kecamatan Jember', icon: Map },
     { id: 5, name: 'Leaderboard Sales', desc: 'Rangking & pencapaian target', icon: Trophy },
     { id: 6, name: 'Target & Komisi', desc: 'Kalkulator bonus & insentif', icon: Calculator },
     { id: 10, name: 'Operasional Sales', desc: 'Evaluasi uang operasional sales', icon: Coins },
-    { id: 14, name: 'Setoran Sales', desc: 'Catat setoran harian/periodik sales', icon: Wallet },
+    { 
+      id: 14, 
+      name: loggedInSalesName ? 'Setoran Saya' : 'Setoran Sales', 
+      desc: loggedInSalesName ? 'Riwayat & buku setoran harian Anda' : 'Catat setoran harian/periodik sales', 
+      icon: Wallet 
+    },
     { id: 15, name: 'Buku Kas & Keuangan', desc: 'Arus kas masuk, keluar & saldo', icon: Coins },
     { id: 11, name: 'Stok Gudang', desc: 'Catat stok masuk, keluar & sisa', icon: Package },
-    { id: 12, name: 'Stok Sales', desc: 'Stok lapangan & penjualan sales', icon: Package },
+    { 
+      id: 12, 
+      name: loggedInSalesName ? 'Stok Salesman' : 'Stok Sales', 
+      desc: loggedInSalesName ? 'Stok di motor & penjualan lapangan' : 'Stok lapangan & penjualan sales', 
+      icon: Package 
+    },
     { id: 13, name: 'Manajemen Freelance', desc: 'Sirkulasi stok & keuangan freelance', icon: Users },
     { id: 7, name: 'AppScript Sync', desc: 'Panduan & link web-hook', icon: Code2 },
     { id: 8, name: 'Log Transaksi', desc: 'Arsip aktivitas real-time', icon: History },
