@@ -43,11 +43,12 @@ import { Transaction, StockEntry } from '../types';
 interface StokSalesProps {
   transactions: Transaction[]; // Already filtered by global FilterBar
   salesNames: string[];
+  loggedInSalesName?: string | null;
 }
 
 const STORAGE_STOCK_KEY = 'makayasa_stok_gudang';
 
-export default function StokSales({ transactions, salesNames }: StokSalesProps) {
+export default function StokSales({ transactions, salesNames, loggedInSalesName }: StokSalesProps) {
   // --- STATE ---
   const [stockEntries, setStockEntries] = useState<StockEntry[]>([]);
   const [viewMode, setViewMode] = useState<'filtered' | 'cumulative'>('cumulative');
@@ -430,12 +431,14 @@ export default function StokSales({ transactions, salesNames }: StokSalesProps) 
             </button>
           </div>
 
-          <button
-            onClick={() => setIsAllocationOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-600/10 transition-all hover:scale-[1.02]"
-          >
-            <Plus className="w-4 h-4" /> Bagi Stok Sales
-          </button>
+          {!loggedInSalesName && (
+            <button
+              onClick={() => setIsAllocationOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-600/10 transition-all hover:scale-[1.02]"
+            >
+              <Plus className="w-4 h-4" /> Bagi Stok Sales
+            </button>
+          )}
         </div>
       </div>
 
@@ -747,18 +750,20 @@ export default function StokSales({ transactions, salesNames }: StokSalesProps) 
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 text-center">
-            <p className="text-[11px] font-bold text-slate-700 mb-2">Ingin menambah stok untuk sales?</p>
-            <button
-              onClick={() => {
-                if (salesNames.length > 0) setAllocSales(salesNames[0]);
-                setIsAllocationOpen(true);
-              }}
-              className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-600 rounded-xl text-xs font-black transition-colors"
-            >
-              + Buat Pengiriman Baru ke Sales
-            </button>
-          </div>
+          {!loggedInSalesName && (
+            <div className="pt-4 border-t border-slate-100 text-center">
+              <p className="text-[11px] font-bold text-slate-700 mb-2">Ingin menambah stok untuk sales?</p>
+              <button
+                onClick={() => {
+                  if (salesNames.length > 0) setAllocSales(salesNames[0]);
+                  setIsAllocationOpen(true);
+                }}
+                className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-600 rounded-xl text-xs font-black transition-colors"
+              >
+                + Buat Pengiriman Baru ke Sales
+              </button>
+            </div>
+          )}
         </div>
 
       </div>
@@ -842,7 +847,7 @@ export default function StokSales({ transactions, salesNames }: StokSalesProps) 
                             {log.keterangan}
                           </td>
                           <td className="py-2.5 px-4 text-center">
-                            {log.canDelete ? (
+                            {log.canDelete && !loggedInSalesName ? (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteAllocation(log.id)}

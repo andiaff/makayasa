@@ -35,9 +35,10 @@ import { formatIDR, formatDateIndo } from '../utils/spreadsheetParser';
 interface SetoranSalesProps {
   transactions: Transaction[];
   salesNames: string[];
+  loggedInSalesName?: string | null;
 }
 
-export default function SetoranSales({ transactions, salesNames }: SetoranSalesProps) {
+export default function SetoranSales({ transactions, salesNames, loggedInSalesName }: SetoranSalesProps) {
   // --- STATE ---
   const [deposits, setDeposits] = useState<SalesDeposit[]>([]);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -1119,22 +1120,24 @@ export default function SetoranSales({ transactions, salesNames }: SetoranSalesP
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 shrink-0">
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-amber-500/10"
-            >
-              <Plus className="w-4 h-4 stroke-[3px]" />
-              Catat Setoran Baru
-            </button>
-            <button
-              onClick={() => setShowArchiveConfirmModal(true)}
-              className="bg-rose-600 hover:bg-rose-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-rose-600/10 border border-rose-700/50"
-            >
-              <Archive className="w-4 h-4" />
-              Tutup Buku / Kosongkan Data
-            </button>
-          </div>
+          {!loggedInSalesName && (
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-amber-500/10"
+              >
+                <Plus className="w-4 h-4 stroke-[3px]" />
+                Catat Setoran Baru
+              </button>
+              <button
+                onClick={() => setShowArchiveConfirmModal(true)}
+                className="bg-rose-600 hover:bg-rose-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-rose-600/10 border border-rose-700/50"
+              >
+                <Archive className="w-4 h-4" />
+                Tutup Buku / Kosongkan Data
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1276,14 +1279,16 @@ export default function SetoranSales({ transactions, salesNames }: SetoranSalesP
           <div className="flex flex-col gap-1 w-full sm:w-auto">
             <div className="flex items-center gap-2">
               <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Buku Besar Setoran Sales</h3>
-              <button
-                type="button"
-                onClick={handleResetBukuBesar}
-                className="text-[9px] font-black text-rose-600 hover:text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-200/50 px-2 py-0.5 rounded transition-all uppercase flex items-center gap-0.5"
-                title="Reset dan Kosongkan Catatan Buku Besar Setoran"
-              >
-                <Trash2 className="w-2.5 h-2.5" /> Reset
-              </button>
+              {!loggedInSalesName && (
+                <button
+                  type="button"
+                  onClick={handleResetBukuBesar}
+                  className="text-[9px] font-black text-rose-600 hover:text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-200/50 px-2 py-0.5 rounded transition-all uppercase flex items-center gap-0.5"
+                  title="Reset dan Kosongkan Catatan Buku Besar Setoran"
+                >
+                  <Trash2 className="w-2.5 h-2.5" /> Reset
+                </button>
+              )}
             </div>
             <p className="text-[10px] text-slate-500 font-medium">Sistem penelusuran histori kas setoran sales</p>
           </div>
@@ -1490,13 +1495,15 @@ export default function SetoranSales({ transactions, salesNames }: SetoranSalesP
                           )}
 
                           {/* Delete button */}
-                          <button
-                            onClick={() => handleDeleteDeposit(dep.id)}
-                            className="bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 px-1.5 py-1 rounded border border-slate-200 hover:border-rose-200 transition-all"
-                            title="Hapus Permanen"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          {!loggedInSalesName && (
+                            <button
+                              onClick={() => handleDeleteDeposit(dep.id)}
+                              className="bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 px-1.5 py-1 rounded border border-slate-200 hover:border-rose-200 transition-all"
+                              title="Hapus Permanen"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       </td>
 

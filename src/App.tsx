@@ -1040,14 +1040,14 @@ export default function App() {
         const setoranTransactions = loggedInSalesName
           ? rawTransactions.filter(tx => tx.salesName && tx.salesName.toLowerCase().trim() === loggedInSalesName.toLowerCase().trim())
           : rawTransactions;
-        return <SetoranSales transactions={setoranTransactions} salesNames={finalSalesNames} />;
+        return <SetoranSales transactions={setoranTransactions} salesNames={finalSalesNames} loggedInSalesName={loggedInSalesName} />;
       }
       case 15:
         return <PembukuanKeuangan />;
       case 11:
         return <StokGudang transactions={filteredTransactions} salesNames={finalSalesNames} />;
       case 12:
-        return <StokSales transactions={filteredTransactions} salesNames={finalSalesNames} />;
+        return <StokSales transactions={filteredTransactions} salesNames={finalSalesNames} loggedInSalesName={loggedInSalesName} />;
       case 13:
         return <FreelanceManagement pricePerPack={config.pricePerPack} />;
       case 7:
