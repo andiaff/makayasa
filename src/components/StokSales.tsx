@@ -98,11 +98,14 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
 
   useEffect(() => {
     loadStockEntries();
+    if (loggedInSalesName) {
+      setSelectedSales(loggedInSalesName);
+    }
     // Set default sales for allocation dropdown
     if (salesNames && salesNames.length > 0) {
       setAllocSales(salesNames[0]);
     }
-  }, [salesNames]);
+  }, [salesNames, loggedInSalesName]);
 
   // Handle outside changes or storage updates
   useEffect(() => {
@@ -137,7 +140,10 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
   
   // Group metrics per sales
   const salesMetrics = useMemo(() => {
-    return salesNames.map(name => {
+    const namesToUse = loggedInSalesName
+      ? salesNames.filter(name => name.toLowerCase().trim() === loggedInSalesName.toLowerCase().trim())
+      : salesNames;
+    return namesToUse.map(name => {
       // 1. Calculate Stok Masuk to this sales (warehouse stock out to this sales OR direct adjustments)
       const allocations = stockEntries.filter(entry => {
         const isWarehouseOutToSales = entry.tipe === 'Keluar' && !entry.hanyaSales;
@@ -210,7 +216,7 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
         salesCount: salesTx.length
       };
     });
-  }, [salesNames, stockEntries, transactions, viewMode]);
+  }, [salesNames, stockEntries, transactions, viewMode, loggedInSalesName]);
 
   // Overall Global Summary
   const globalSummary = useMemo(() => {

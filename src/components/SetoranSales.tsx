@@ -942,7 +942,10 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
   // --- RECONCILIATION ASSISTANT LOGIC ---
   const reconciliationData = useMemo(() => {
     // Generate an analysis of outstanding/un-deposited sales for each representative
-    return salesNames.map(name => {
+    const namesToUse = loggedInSalesName
+      ? salesNames.filter(name => name.toLowerCase().trim() === loggedInSalesName.toLowerCase().trim())
+      : salesNames;
+    return namesToUse.map(name => {
       // Find all deposits recorded for this sales
       const salesDeposits = deposits.filter(dep => dep.salesName === name);
       
@@ -1023,10 +1026,18 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
           : 'ok'
       };
     });
-  }, [transactions, deposits, salesNames]);
+  }, [transactions, deposits, salesNames, loggedInSalesName]);
 
   // --- STATS CALCULATOR ---
-  const activeDeposits = useMemo(() => deposits.filter(dep => !dep.archived), [deposits]);
+  const activeDeposits = useMemo(() => {
+    return deposits.filter(dep => {
+      if (dep.archived) return false;
+      if (loggedInSalesName && dep.salesName.toLowerCase().trim() !== loggedInSalesName.toLowerCase().trim()) {
+        return false;
+      }
+      return true;
+    });
+  }, [deposits, loggedInSalesName]);
 
   const stats = useMemo(() => {
     let totalOmsetPeriod = 0;
@@ -1058,6 +1069,9 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
   // --- FILTERED DEPOSITS LIST ---
   const filteredDeposits = useMemo(() => {
     return deposits.filter(dep => {
+      if (loggedInSalesName && dep.salesName.toLowerCase().trim() !== loggedInSalesName.toLowerCase().trim()) {
+        return false;
+      }
       const matchesSearch = dep.salesName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (dep.keterangan || '').toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -1074,7 +1088,7 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
 
       return matchesSearch && matchesStatus && matchesArchive;
     });
-  }, [deposits, searchTerm, filterStatus, archiveFilter]);
+  }, [deposits, searchTerm, filterStatus, archiveFilter, loggedInSalesName]);
 
   return (
     <div className="space-y-6">
