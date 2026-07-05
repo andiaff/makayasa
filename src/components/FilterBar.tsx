@@ -19,6 +19,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { FilterOption } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface FilterBarProps {
   filter: FilterOption;
@@ -182,33 +183,44 @@ export default function FilterBar({ filter, setFilter, totalRecords }: FilterBar
           </div>
 
           {/* Manual Range Date Inputs (Mobile specific grid to prevent wrap/overlaps) */}
-          {filter.type === 'range' && !showAdvanced && (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
-              <span className="block text-[10px] uppercase font-extrabold text-slate-400 tracking-wider">Atur Rentang Tanggal Manual</span>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white border border-slate-200 rounded-lg p-2 flex flex-col justify-center min-h-[44px]">
-                  <span className="text-[9px] font-black text-slate-400 uppercase">Dari</span>
-                  <input
-                    type="date"
-                    id="filter_start_date_mobile"
-                    value={filter.startDate || ''}
-                    onChange={(e) => setFilter({ ...filter, startDate: e.target.value })}
-                    className="bg-transparent text-slate-700 focus:outline-none cursor-pointer text-xs font-bold w-full mt-0.5"
-                  />
+          <AnimatePresence initial={false}>
+            {filter.type === 'range' && !showAdvanced && (
+              <motion.div
+                key="manual_range_mobile"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 mt-2">
+                  <span className="block text-[10px] uppercase font-extrabold text-slate-400 tracking-wider">Atur Rentang Tanggal Manual</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-white border border-slate-200 rounded-lg p-2 flex flex-col justify-center min-h-[44px]">
+                      <span className="text-[9px] font-black text-slate-400 uppercase">Dari</span>
+                      <input
+                        type="date"
+                        id="filter_start_date_mobile"
+                        value={filter.startDate || ''}
+                        onChange={(e) => setFilter({ ...filter, startDate: e.target.value })}
+                        className="bg-transparent text-slate-700 focus:outline-none cursor-pointer text-xs font-bold w-full mt-0.5"
+                      />
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-lg p-2 flex flex-col justify-center min-h-[44px]">
+                      <span className="text-[9px] font-black text-slate-400 uppercase">S/D</span>
+                      <input
+                        type="date"
+                        id="filter_end_date_mobile"
+                        value={filter.endDate || ''}
+                        onChange={(e) => setFilter({ ...filter, endDate: e.target.value })}
+                        className="bg-transparent text-slate-700 focus:outline-none cursor-pointer text-xs font-bold w-full mt-0.5"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-white border border-slate-200 rounded-lg p-2 flex flex-col justify-center min-h-[44px]">
-                  <span className="text-[9px] font-black text-slate-400 uppercase">S/D</span>
-                  <input
-                    type="date"
-                    id="filter_end_date_mobile"
-                    value={filter.endDate || ''}
-                    onChange={(e) => setFilter({ ...filter, endDate: e.target.value })}
-                    className="bg-transparent text-slate-700 focus:outline-none cursor-pointer text-xs font-bold w-full mt-0.5"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Counter Status on Mobile */}
           <div className="flex items-center justify-between px-2 pt-1 border-t border-slate-100">
@@ -221,7 +233,7 @@ export default function FilterBar({ filter, setFilter, totalRecords }: FilterBar
         </div>
 
         {/* Tablet & Desktop Layout (hidden on mobile) */}
-        <div className="hidden sm:flex flex-wrap items-center gap-2">
+        <div className="hidden sm:flex flex-wrap items-center gap-2 relative">
           {filterTypes.map((item) => {
             const Icon = item.icon;
             const isActive = filter.type === item.type;
@@ -230,15 +242,20 @@ export default function FilterBar({ filter, setFilter, totalRecords }: FilterBar
                 key={item.type}
                 id={`filter_pill_${item.type}`}
                 onClick={() => handleTypeSelect(item.type as any)}
-                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
-                  isActive
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/10'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600'
-                }`}
+                className="relative flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold min-h-[44px] focus:outline-none cursor-pointer transition-all duration-200"
                 title={item.desc}
               >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{item.name}</span>
+                {isActive && (
+                  <motion.span
+                    layoutId="activeFilterBg"
+                    className="absolute inset-0 bg-amber-500 rounded-xl shadow-md shadow-amber-500/10"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className={`relative z-10 flex items-center gap-2 ${isActive ? 'text-slate-950 font-black' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{item.name}</span>
+                </span>
               </button>
             );
           })}
@@ -249,7 +266,7 @@ export default function FilterBar({ filter, setFilter, totalRecords }: FilterBar
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all min-h-[44px] cursor-pointer ${
               showAdvanced || (filter.type === 'range' && (customStartDay !== 1 || cycleType === 'custom'))
                 ? 'bg-indigo-50 border border-indigo-200 text-indigo-700'
                 : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-transparent'
@@ -267,31 +284,41 @@ export default function FilterBar({ filter, setFilter, totalRecords }: FilterBar
 
         {/* Right Side (Tablet/Desktop): Manual Inputs OR Current Active Info */}
         <div className="hidden sm:flex items-center gap-3 self-end lg:self-auto">
-          {filter.type === 'range' && !showAdvanced && (
-            <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-150 text-xs font-bold">
-              <div className="flex items-center gap-1 px-1.5">
-                <span className="text-[9px] font-black text-slate-400 uppercase">Dari:</span>
-                <input
-                  type="date"
-                  id="filter_start_date"
-                  value={filter.startDate || ''}
-                  onChange={(e) => setFilter({ ...filter, startDate: e.target.value })}
-                  className="bg-transparent text-slate-700 focus:outline-none cursor-pointer text-xs font-extrabold"
-                />
-              </div>
-              <span className="text-slate-300">-</span>
-              <div className="flex items-center gap-1 px-1.5">
-                <span className="text-[9px] font-black text-slate-400 uppercase">S/D:</span>
-                <input
-                  type="date"
-                  id="filter_end_date"
-                  value={filter.endDate || ''}
-                  onChange={(e) => setFilter({ ...filter, endDate: e.target.value })}
-                  className="bg-transparent text-slate-700 focus:outline-none cursor-pointer text-xs font-extrabold"
-                />
-              </div>
-            </div>
-          )}
+          <AnimatePresence mode="wait">
+            {filter.type === 'range' && !showAdvanced && (
+              <motion.div
+                key="manual_range_desktop"
+                initial={{ opacity: 0, scale: 0.95, x: 20 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.95, x: 20 }}
+                transition={{ type: 'spring', damping: 20, stiffness: 200 }}
+              >
+                <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-150 text-xs font-bold">
+                  <div className="flex items-center gap-1 px-1.5">
+                    <span className="text-[9px] font-black text-slate-400 uppercase">Dari:</span>
+                    <input
+                      type="date"
+                      id="filter_start_date"
+                      value={filter.startDate || ''}
+                      onChange={(e) => setFilter({ ...filter, startDate: e.target.value })}
+                      className="bg-transparent text-slate-700 focus:outline-none cursor-pointer text-xs font-extrabold"
+                    />
+                  </div>
+                  <span className="text-slate-300">-</span>
+                  <div className="flex items-center gap-1 px-1.5">
+                    <span className="text-[9px] font-black text-slate-400 uppercase">S/D:</span>
+                    <input
+                      type="date"
+                      id="filter_end_date"
+                      value={filter.endDate || ''}
+                      onChange={(e) => setFilter({ ...filter, endDate: e.target.value })}
+                      className="bg-transparent text-slate-700 focus:outline-none cursor-pointer text-xs font-extrabold"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Record counter indicator */}
           <div className="flex items-center gap-1.5 text-slate-500 text-xs font-semibold shrink-0">
@@ -303,143 +330,164 @@ export default function FilterBar({ filter, setFilter, totalRecords }: FilterBar
       </div>
 
       {/* 2. ADVANCED CYCLES CONTROLLER PANEL (EXPANDABLE) */}
-      {showAdvanced && (
-        <div className="bg-indigo-950 text-indigo-100 rounded-2xl p-5 border border-indigo-800 shadow-lg space-y-4 relative overflow-hidden">
-          {/* Subtle decor glowing orb */}
-          <div className="absolute -top-12 -right-12 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-          
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-indigo-900/80 pb-4">
-            <div className="space-y-0.5">
-              <h4 className="text-xs font-black tracking-wider uppercase text-amber-400 flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-amber-400" />
-                Alat Siklus Pembukuan & Periode Spesifik
-              </h4>
-              <p className="text-[10px] text-indigo-300 font-medium">
-                Solusi praktis untuk membandingkan performa per-bulan murni (tgl 1-30) atau per-siklus tutup buku (tgl 15-15).
-              </p>
-            </div>
-            
-            {/* Display active calculation preview */}
-            <div className="bg-indigo-900/50 border border-indigo-800/80 px-3 py-2 rounded-xl text-center self-stretch md:self-auto flex items-center justify-center gap-2">
-              <span className="text-[10px] font-black uppercase text-indigo-300">Periode Aktif:</span>
-              <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-300">
-                <span>{formatDateReadable(filter.startDate)}</span>
-                <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{formatDateReadable(filter.endDate)}</span>
+      <AnimatePresence initial={false}>
+        {showAdvanced && (
+          <motion.div
+            key="advanced_accounting_cycles_panel"
+            initial={{ opacity: 0, height: 0, scale: 0.98 }}
+            animate={{ opacity: 1, height: 'auto', scale: 1 }}
+            exit={{ opacity: 0, height: 0, scale: 0.98 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-indigo-950 text-indigo-100 rounded-2xl p-5 border border-indigo-800 shadow-lg space-y-4 relative overflow-hidden mt-1">
+              {/* Subtle decor glowing orb */}
+              <div className="absolute -top-12 -right-12 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+              
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-indigo-900/80 pb-4">
+                <div className="space-y-0.5">
+                  <h4 className="text-xs font-black tracking-wider uppercase text-amber-400 flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-amber-400" />
+                    Alat Siklus Pembukuan & Periode Spesifik
+                  </h4>
+                  <p className="text-[10px] text-indigo-300 font-medium">
+                    Solusi praktis untuk membandingkan performa per-bulan murni (tgl 1-30) atau per-siklus tutup buku (tgl 15-15).
+                  </p>
+                </div>
+                
+                {/* Display active calculation preview */}
+                <div className="bg-indigo-900/50 border border-indigo-800/80 px-3 py-2 rounded-xl text-center self-stretch md:self-auto flex items-center justify-center gap-2">
+                  <span className="text-[10px] font-black uppercase text-indigo-300">Periode Aktif:</span>
+                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-300">
+                    <span>{formatDateReadable(filter.startDate)}</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{formatDateReadable(filter.endDate)}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-bold">
-            
-            {/* COLUMN 1: SELECT MONTH */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] uppercase tracking-wider text-indigo-300 font-extrabold">Pilih Bulan Acuan</label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => handleCycleChange(Number(e.target.value), selectedYear, cycleType, customStartDay)}
-                className="w-full bg-indigo-900 border border-indigo-800 text-white rounded-xl px-3 py-2.5 text-xs font-extrabold focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
-              >
-                {indonesianMonths.map(m => (
-                  <option key={m.value} value={m.value}>{m.name}</option>
-                ))}
-              </select>
-            </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-bold">
+                
+                {/* COLUMN 1: SELECT MONTH */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] uppercase tracking-wider text-indigo-300 font-extrabold">Pilih Bulan Acuan</label>
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => handleCycleChange(Number(e.target.value), selectedYear, cycleType, customStartDay)}
+                    className="w-full bg-indigo-900 border border-indigo-800 text-white rounded-xl px-3 py-2.5 text-xs font-extrabold focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
+                  >
+                    {indonesianMonths.map(m => (
+                      <option key={m.value} value={m.value}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* COLUMN 2: SELECT YEAR */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] uppercase tracking-wider text-indigo-300 font-extrabold">Pilih Tahun</label>
-              <select
-                value={selectedYear}
-                onChange={(e) => handleCycleChange(selectedMonth, Number(e.target.value), cycleType, customStartDay)}
-                className="w-full bg-indigo-900 border border-indigo-800 text-white rounded-xl px-3 py-2.5 text-xs font-extrabold focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
-              >
-                {years.map(y => (
-                  <option key={y} value={y}>Tahun {y}</option>
-                ))}
-              </select>
-            </div>
+                {/* COLUMN 2: SELECT YEAR */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] uppercase tracking-wider text-indigo-300 font-extrabold">Pilih Tahun</label>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => handleCycleChange(selectedMonth, Number(e.target.value), cycleType, customStartDay)}
+                    className="w-full bg-indigo-900 border border-indigo-800 text-white rounded-xl px-3 py-2.5 text-xs font-extrabold focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
+                  >
+                    {years.map(y => (
+                      <option key={y} value={y}>Tahun {y}</option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* COLUMN 3: CYCLE MODE SELECTOR */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] uppercase tracking-wider text-indigo-300 font-extrabold">Aturan Siklus / Model Periode</label>
-              <div className="grid grid-cols-2 gap-1 bg-indigo-900 p-1 rounded-xl border border-indigo-800">
-                <button
-                  type="button"
-                  onClick={() => handleCycleChange(selectedMonth, selectedYear, 'calendar', customStartDay)}
-                  className={`py-2 rounded-lg text-[10px] font-black transition-all ${
-                    cycleType === 'calendar' 
-                      ? 'bg-amber-500 text-slate-950 shadow-sm' 
-                      : 'text-indigo-200 hover:bg-indigo-850'
-                  }`}
-                >
-                  Kalender (1 s/d Akhir)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCycleChange(selectedMonth, selectedYear, 'custom', customStartDay)}
-                  className={`py-2 rounded-lg text-[10px] font-black transition-all ${
-                    cycleType === 'custom' 
-                      ? 'bg-indigo-600 text-white shadow-sm border border-indigo-500/50' 
-                      : 'text-indigo-200 hover:bg-indigo-850'
-                  }`}
-                >
-                  Siklus Kas (15 ke 15)
-                </button>
+                {/* COLUMN 3: CYCLE MODE SELECTOR */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] uppercase tracking-wider text-indigo-300 font-extrabold">Aturan Siklus / Model Periode</label>
+                  <div className="grid grid-cols-2 gap-1 bg-indigo-900 p-1 rounded-xl border border-indigo-800">
+                    <button
+                      type="button"
+                      onClick={() => handleCycleChange(selectedMonth, selectedYear, 'calendar', customStartDay)}
+                      className="relative py-2 rounded-lg text-[10px] font-black focus:outline-none cursor-pointer min-h-[34px]"
+                    >
+                      {cycleType === 'calendar' && (
+                        <motion.span
+                          layoutId="activeCycleBg"
+                          className="absolute inset-0 bg-amber-500 rounded-lg shadow-sm"
+                          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                        />
+                      )}
+                      <span className={`relative z-10 ${cycleType === 'calendar' ? 'text-slate-950 font-black' : 'text-indigo-200 hover:text-white'}`}>
+                        Kalender (1 s/d Akhir)
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCycleChange(selectedMonth, selectedYear, 'custom', customStartDay)}
+                      className="relative py-2 rounded-lg text-[10px] font-black focus:outline-none cursor-pointer min-h-[34px]"
+                    >
+                      {cycleType === 'custom' && (
+                        <motion.span
+                          layoutId="activeCycleBg"
+                          className="absolute inset-0 bg-indigo-600 rounded-lg shadow-sm border border-indigo-500/50"
+                          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                        />
+                      )}
+                      <span className={`relative z-10 ${cycleType === 'custom' ? 'text-white font-black' : 'text-indigo-200 hover:text-white'}`}>
+                        Siklus Kas (15 ke 15)
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* COLUMN 4: CYCLE START DAY SETTING (Only active if custom cycle is chosen) */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] uppercase tracking-wider text-indigo-300 font-extrabold">
+                    Hari Mulai Siklus Buku
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="2"
+                      max="28"
+                      disabled={cycleType === 'calendar'}
+                      value={customStartDay}
+                      onChange={(e) => {
+                        const val = Math.min(28, Math.max(2, Number(e.target.value) || 2));
+                        handleCycleChange(selectedMonth, selectedYear, cycleType, val);
+                      }}
+                      className={`w-full bg-indigo-900 border text-white rounded-xl px-3 py-2.5 text-xs font-black focus:outline-none focus:ring-1 focus:ring-amber-400 ${
+                        cycleType === 'calendar' 
+                          ? 'opacity-40 cursor-not-allowed border-indigo-900 text-indigo-400' 
+                          : 'border-indigo-800 cursor-pointer'
+                      }`}
+                      placeholder="Contoh: 15"
+                    />
+                    {cycleType === 'custom' && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-indigo-400 font-bold pointer-events-none">
+                        Mulai Tgl {customStartDay}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
               </div>
-            </div>
 
-            {/* COLUMN 4: CYCLE START DAY SETTING (Only active if custom cycle is chosen) */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] uppercase tracking-wider text-indigo-300 font-extrabold">
-                Hari Mulai Siklus Buku
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  min="2"
-                  max="28"
-                  disabled={cycleType === 'calendar'}
-                  value={customStartDay}
-                  onChange={(e) => {
-                    const val = Math.min(28, Math.max(2, Number(e.target.value) || 2));
-                    handleCycleChange(selectedMonth, selectedYear, cycleType, val);
-                  }}
-                  className={`w-full bg-indigo-900 border text-white rounded-xl px-3 py-2.5 text-xs font-black focus:outline-none focus:ring-1 focus:ring-amber-400 ${
-                    cycleType === 'calendar' 
-                      ? 'opacity-40 cursor-not-allowed border-indigo-900 text-indigo-400' 
-                      : 'border-indigo-800 cursor-pointer'
-                  }`}
-                  placeholder="Contoh: 15"
-                />
-                {cycleType === 'custom' && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-indigo-400 font-bold pointer-events-none">
-                    Mulai Tgl {customStartDay}
-                  </span>
-                )}
+              {/* Quick guide text */}
+              <div className="bg-indigo-900/30 p-3 rounded-xl border border-indigo-900/50 flex items-start gap-2.5 text-[10px] text-indigo-300 leading-relaxed">
+                <HelpCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-extrabold text-amber-300">Cara kerja filter siklus ini:</span>
+                  <ul className="list-disc pl-3 mt-1 space-y-0.5 font-medium">
+                    {cycleType === 'calendar' ? (
+                      <li>Sistem menyaring data transaksi penuh mulai <strong className="text-white">1 {indonesianMonths.find(m => m.value === selectedMonth)?.name} {selectedYear}</strong> sampai <strong className="text-white">akhir bulan</strong> tersebut.</li>
+                    ) : (
+                      <li>Sistem menyaring data kas harian mulai <strong className="text-white">{customStartDay} {indonesianMonths.find(m => m.value === (selectedMonth === 1 ? 12 : selectedMonth - 1))?.name} {selectedMonth === 1 ? selectedYear - 1 : selectedYear}</strong> sampai <strong className="text-white">{customStartDay} {indonesianMonths.find(m => m.value === selectedMonth)?.name} {selectedYear}</strong>.</li>
+                    )}
+                    <li>Semua data di dashboard utama, grafik kunjungan, komisi, setoran sales, dan log aktivitas akan ikut menyinkronkan data secara otomatis sesuai rentang ini.</li>
+                  </ul>
+                </div>
               </div>
+
             </div>
-
-          </div>
-
-          {/* Quick guide text */}
-          <div className="bg-indigo-900/30 p-3 rounded-xl border border-indigo-900/50 flex items-start gap-2.5 text-[10px] text-indigo-300 leading-relaxed">
-            <HelpCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-extrabold text-amber-300">Cara kerja filter siklus ini:</span>
-              <ul className="list-disc pl-3 mt-1 space-y-0.5 font-medium">
-                {cycleType === 'calendar' ? (
-                  <li>Sistem menyaring data transaksi penuh mulai <strong className="text-white">1 {indonesianMonths.find(m => m.value === selectedMonth)?.name} {selectedYear}</strong> sampai <strong className="text-white">akhir bulan</strong> tersebut.</li>
-                ) : (
-                  <li>Sistem menyaring data kas harian mulai <strong className="text-white">{customStartDay} {indonesianMonths.find(m => m.value === (selectedMonth === 1 ? 12 : selectedMonth - 1))?.name} {selectedMonth === 1 ? selectedYear - 1 : selectedYear}</strong> sampai <strong className="text-white">{customStartDay} {indonesianMonths.find(m => m.value === selectedMonth)?.name} {selectedYear}</strong>.</li>
-                )}
-                <li>Semua data di dashboard utama, grafik kunjungan, komisi, setoran sales, dan log aktivitas akan ikut menyinkronkan data secara otomatis sesuai rentang ini.</li>
-              </ul>
-            </div>
-          </div>
-
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

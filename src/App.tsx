@@ -41,6 +41,7 @@ import FreelanceManagement from './components/FreelanceManagement';
 import SetoranSales from './components/SetoranSales';
 import PembukuanKeuangan from './components/PembukuanKeuangan';
 import WilayahArea from './components/WilayahArea';
+import SkeletonLoader from './components/SkeletonLoader';
 
 // Local storage key constants
 const STORAGE_CONFIG_KEY = 'makayasa_owner_config';
@@ -1180,15 +1181,19 @@ export default function App() {
           {/* Slide-fade Animated view router */}
           <div className="min-h-[500px]">
             <AnimatePresence mode="wait">
-              <motion.div
-                key={activeMenu}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
-                {renderActiveMenu()}
-              </motion.div>
+              {loading ? (
+                <SkeletonLoader key="skeleton" menuId={activeMenu} />
+              ) : (
+                <motion.div
+                  key={activeMenu}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  {renderActiveMenu()}
+                </motion.div>
+              )}
             </AnimatePresence>
           </div>
 

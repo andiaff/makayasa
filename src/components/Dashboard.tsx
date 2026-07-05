@@ -14,7 +14,8 @@ import {
   Users, 
   Store,
   ChevronRight,
-  ArrowUpRight
+  ArrowUpRight,
+  Package
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { formatIDR } from '../utils/spreadsheetParser';
@@ -179,8 +180,14 @@ export default function Dashboard({ transactions, onNavigateToMenu }: DashboardP
       animate="show"
       className="space-y-6"
     >
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+      {/* SECTION: METRIK UTAMA */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+            Metrik Utama & Analisis Distribusi
+          </h4>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-5">
         
         {/* Card 1: Total Omset */}
         <motion.div 
@@ -274,7 +281,7 @@ export default function Dashboard({ transactions, onNavigateToMenu }: DashboardP
         <motion.div 
           variants={itemVariants}
           whileHover={{ y: -4, boxShadow: '0 10px 25px -5px rgba(139, 92, 246, 0.1)' }}
-          className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between transition-all"
+          className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between transition-all col-span-2 md:col-span-1 lg:col-span-1"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Rasio Sukses</span>
@@ -293,6 +300,7 @@ export default function Dashboard({ transactions, onNavigateToMenu }: DashboardP
         </motion.div>
 
       </div>
+    </div>
 
       {/* Charts section */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

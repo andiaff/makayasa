@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { 
-  getFirestore, 
+  initializeFirestore, 
   collection, 
   doc, 
   setDoc, 
@@ -27,7 +27,9 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId);
 
 // Synced keys mapping: localStorageKey -> firestoreCollection
 const SYNC_KEYS: Record<string, string> = {
