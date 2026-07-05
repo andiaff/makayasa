@@ -1124,6 +1124,7 @@ export default function App() {
         isCollapsedTablet={sidebarCollapsed}
         setIsCollapsedTablet={setSidebarCollapsed}
         config={config}
+        loggedInSalesName={loggedInSalesName}
       />
 
       {/* Main Workspace Frame */}

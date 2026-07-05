@@ -75,9 +75,9 @@ export default function Sidebar({
     { id: 9, name: 'Sistem Pengaturan', desc: 'Konfigurasi harga & sumber data', icon: Settings },
   ];
 
-  // Filter menu items for Sales accounts (only show 1, 2, 3, 4, 12, 14)
+  // Filter menu items for Sales accounts (only show 1, 2, 3, 4, 16, 14, 12)
   const menuItems = loggedInSalesName
-    ? allMenuItems.filter(item => [1, 2, 3, 4, 12, 14].includes(item.id))
+    ? allMenuItems.filter(item => [1, 2, 3, 4, 16, 14, 12].includes(item.id))
     : allMenuItems;
 
   const handleMenuClick = (id: number) => {
@@ -153,7 +153,7 @@ export default function Sidebar({
         {/* Menu Options Scrollable */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1 custom-scrollbar">
           <div className={`text-[9px] uppercase font-black tracking-widest text-slate-500 px-3 mb-2 transition-opacity duration-200 ${isCollapsed ? 'lg:hidden' : 'block'}`}>
-            {loggedInSalesName ? '6 Menu Utama Sales' : '16 Menu Utama Komandan'}
+            {loggedInSalesName ? '7 Menu Utama Sales' : '16 Menu Utama Komandan'}
           </div>
           
           {menuItems.map((item) => {
