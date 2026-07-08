@@ -65,7 +65,6 @@ export default function Login({ onLoginSuccess, config }: LoginProps) {
             <TrendingUp className="w-8 h-8" />
           </div>
           <h2 className="text-2xl font-bold font-sans text-slate-900 tracking-tight uppercase">{config?.brandName || 'MAKAYASA JEMBER'}</h2>
-          <p className="text-sm font-medium text-amber-600 tracking-wider uppercase mt-1">{config?.brandSubtitle || 'KOMANDAN'}</p>
           <p className="text-xs text-slate-500 mt-2">Masuk untuk memantau kinerja sales & omset real-time</p>
         </div>
 
@@ -82,7 +81,7 @@ export default function Login({ onLoginSuccess, config }: LoginProps) {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Username Komandan</label>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Username</label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
                 <User className="w-4 h-4" />
@@ -140,16 +139,28 @@ export default function Login({ onLoginSuccess, config }: LoginProps) {
                 Memverifikasi...
               </span>
             ) : (
-              'Masuk Command Center'
+              'Login'
             )}
           </button>
         </form>
 
         {/* Brand Motto */}
-        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-          <p className="text-xs italic font-semibold text-amber-600 tracking-wider uppercase font-sans">
+        <div className="mt-8 pt-6 border-t border-slate-100 text-center space-y-4">
+          <p className="text-base font-extrabold text-amber-600 tracking-widest uppercase font-sans drop-shadow-sm">
             "Dari Desa untuk Dunia"
           </p>
+          
+          {/* Motivational Quote Card - Option A (Simple, Powerful, Eye-catching) */}
+          <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 shadow-sm relative overflow-hidden group hover:border-amber-200 transition-all">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-amber-100/30 rounded-full blur-xl -mr-4 -mt-4 transition-all" />
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Motto Perjuangan Sales</p>
+            <p className="text-sm text-slate-850 font-extrabold tracking-wide font-sans">
+              IKHTIAR • KERJA KERAS • SABAR • SUKSES
+            </p>
+            <p className="text-[10px] text-slate-500 mt-1.5 font-medium italic">
+              "Kerja keras tidak akan mengkhianati hasil, semua atas izin Allah SWT."
+            </p>
+          </div>
         </div>
       </motion.div>
     </div>
