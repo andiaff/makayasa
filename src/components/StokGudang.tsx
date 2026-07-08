@@ -26,7 +26,10 @@ import {
   ClipboardCheck,
   Import,
   TrendingUp,
-  Sliders
+  Sliders,
+  Store,
+  Users,
+  Gift
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -105,11 +108,25 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
   // Handle default source based on type
   useEffect(() => {
     if (formType === 'Masuk') {
-      setFormSource('Pabrik Makayasa');
+      const validMasukOptions = ['Pabrik Makayasa', 'Koreksi Tambah'];
+      if (!validMasukOptions.includes(formSource)) {
+        setFormSource('Pabrik Makayasa');
+      }
     } else {
-      setFormSource(activeSales[0] ? `Sales ${activeSales[0]}` : 'Sales Umum');
+      if (activeSales.length > 0) {
+        const validKeluarOptions = [
+          ...activeSales.map(sales => `Sales ${sales}`),
+          'Sales Umum',
+          'Retur Cacat',
+          'Retur Pasar',
+          'Koreksi Kurang'
+        ];
+        if (!validKeluarOptions.includes(formSource)) {
+          setFormSource(`Sales ${activeSales[0]}`);
+        }
+      }
     }
-  }, [formType, activeSales]);
+  }, [formType, activeSales, formSource]);
 
   // --- PERSISTENCE & INITIAL SEEDING ---
   const loadStockEntries = () => {
@@ -229,7 +246,7 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
       return;
     }
 
-    const normalizedSource = formSource.trim() || (formType === 'Masuk' ? 'Pabrik Utama' : 'Sales Umum');
+    const normalizedSource = formSource.trim() || (formType === 'Masuk' ? 'Pabrik Makayasa' : 'Sales Umum');
     let extractedSalesName: string | undefined = undefined;
     
     // Automatically extract sales name if source/destination starts with "Sales "
@@ -243,13 +260,36 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
       }
     }
 
+    let defaultKeterangan = '';
+    if (formType === 'Masuk') {
+      if (normalizedSource.startsWith('Sales ')) {
+        defaultKeterangan = `Pengembalian sisa stok ${normalizedSource} ke Gudang Utama`;
+      } else if (normalizedSource === 'Koreksi Tambah') {
+        defaultKeterangan = 'Koreksi penyesuaian penambahan stok Gudang Utama';
+      } else {
+        defaultKeterangan = 'Stok masuk manual dari Pabrik Makayasa';
+      }
+    } else { // Keluar
+      if (normalizedSource.startsWith('Sales ')) {
+        defaultKeterangan = `Kirim/Drop stok Gudang Utama ke ${normalizedSource}`;
+      } else if (normalizedSource === 'Retur Cacat') {
+        defaultKeterangan = 'Pengeluaran barang cacat/rusak (Dibuang)';
+      } else if (normalizedSource === 'Retur Pasar') {
+        defaultKeterangan = 'Barang diretur ke pasar/distributor';
+      } else if (normalizedSource === 'Koreksi Kurang') {
+        defaultKeterangan = 'Koreksi penyesuaian pengurangan stok Gudang Utama';
+      } else {
+        defaultKeterangan = 'Stok keluar manual dari Gudang Utama';
+      }
+    }
+
     const newEntry: StockEntry = {
       id: `STK-APP-${Date.now()}`,
       tanggal: new Date(formDate),
       tipe: formType,
       sumberTujuan: normalizedSource,
       jumlah: parsedQty,
-      keterangan: formDesc.trim() || (formType === 'Masuk' ? 'Stok masuk manual dari aplikasi' : 'Stok keluar manual dari aplikasi'),
+      keterangan: formDesc.trim() || defaultKeterangan,
       sumberInput: 'Aplikasi',
       hanyaSales: false,
       isReversed: false,
@@ -555,6 +595,59 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
     return totalStockMasuk - totalStockKeluar;
   }, [totalStockMasuk, totalStockKeluar]);
 
+  // Total incoming stock murni dari Pabrik Makayasa only
+  const totalStockMasukPabrik = useMemo(() => {
+    return stockEntries
+      .filter(e => e.tipe === 'Masuk' && e.sumberTujuan === 'Pabrik Makayasa' && !e.isReversed)
+      .reduce((sum, e) => sum + e.jumlah, 0);
+  }, [stockEntries]);
+
+  // Total outgoing stock murni ke Sales (Netto) = Kirim Sales - Pengembalian Sales
+  const totalStockKeluarSalesBersih = useMemo(() => {
+    const totalKeluarSales = stockEntries
+      .filter(e => e.tipe === 'Keluar' && !e.isReversed && e.sumberTujuan && (e.sumberTujuan.startsWith('Sales ') || e.sumberTujuan === 'Sales Umum'))
+      .reduce((sum, e) => sum + e.jumlah, 0);
+    
+    const totalPengembalianSales = stockEntries
+      .filter(e => e.tipe === 'Masuk' && !e.isReversed && e.sumberTujuan && (e.sumberTujuan.startsWith('Sales ') || e.sumberTujuan === 'Sales Umum'))
+      .reduce((sum, e) => sum + e.jumlah, 0);
+
+    return Math.max(0, totalKeluarSales - totalPengembalianSales);
+  }, [stockEntries]);
+
+  // Total actual sales made by all sales agents (Penjualan riil di pasar)
+  const totalPenjualanRiil = useMemo(() => {
+    return transactions.reduce((sum, tx) => sum + tx.qtyPacks, 0);
+  }, [transactions]);
+
+  // Total free testers / promos distributed by all sales agents
+  const totalTesterPromo = useMemo(() => {
+    return stockEntries
+      .filter(e => e.hanyaSales && e.id && e.id.startsWith('STK-TST-') && !e.isReversed)
+      .reduce((sum, e) => sum + e.jumlah, 0);
+  }, [stockEntries]);
+
+  // Current stock held in hands of all sales agents combined
+  const totalStokTanganSales = useMemo(() => {
+    return Math.max(0, totalStockKeluarSalesBersih - totalPenjualanRiil - totalTesterPromo);
+  }, [totalStockKeluarSalesBersih, totalPenjualanRiil, totalTesterPromo]);
+
+  // Helper to convert packs into Bal, Selop, and Pack format
+  const convertPacksToUnitsStr = (packs: number): string => {
+    if (packs <= 0) return '0 Pack';
+    const bal = Math.floor(packs / 200);
+    const remainderAfterBal = packs % 200;
+    const selop = Math.floor(remainderAfterBal / 10);
+    const pack = remainderAfterBal % 10;
+    
+    const parts: string[] = [];
+    if (bal > 0) parts.push(`${bal} Bal`);
+    if (selop > 0) parts.push(`${selop} Selop`);
+    if (pack > 0) parts.push(`${pack} Pack`);
+    
+    return parts.join(' ');
+  };
+
   // Is stock below alert threshold?
   const isStockCritical = sisaStokGudang < minStockAlert;
 
@@ -566,8 +659,8 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
 
       // 1. Search term (by Source or Description)
       const matchesSearch = 
-        entry.sumberTujuan.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.keterangan.toLowerCase().includes(searchTerm.toLowerCase());
+        (entry.sumberTujuan || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (entry.keterangan || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       // 2. Filter Type (Masuk / Keluar / Semua)
       const matchesType = filterType === 'Semua' || entry.tipe === filterType;
@@ -619,7 +712,8 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
     stockEntries
       .filter(e => e.tipe === 'Keluar' && !e.isReversed && !e.hanyaSales)
       .forEach(e => {
-        map[e.sumberTujuan] = (map[e.sumberTujuan] || 0) + e.jumlah;
+        const key = e.sumberTujuan || 'Lainnya';
+        map[key] = (map[key] || 0) + e.jumlah;
       });
 
     return Object.entries(map)
@@ -668,67 +762,176 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
       </div>
 
       {/* 2. Key Stock Dashboard KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* KPI 1: Remaining Stock in Warehouse */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5 relative overflow-hidden">
-          <div className={`p-4 rounded-2xl ${isStockCritical ? 'bg-rose-50 text-rose-600 animate-pulse' : 'bg-emerald-50 text-emerald-600'}`}>
-            <Package className="w-8 h-8" />
-          </div>
-          <div className="space-y-1">
-            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Sisa Stok Gudang</span>
-            <h3 className={`text-3xl font-black font-mono tracking-tight ${isStockCritical ? 'text-rose-600' : 'text-slate-900'}`}>
-              {sisaStokGudang.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
-            </h3>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-slate-500 font-bold font-mono">
-                = {Number((sisaStokGudang / 10).toFixed(1))} Selop
-              </span>
-              {isStockCritical ? (
-                <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md uppercase">
-                  ⚠️ Limit kritis!
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md uppercase">
-                  ✓ Stok Aman
-                </span>
-              )}
+      <div className="space-y-6">
+        {/* Row 1: Aliran Gudang Utama */}
+        <div className="space-y-2">
+          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-indigo-500" />
+            Aliran Gudang Utama
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* KPI 1: Remaining Stock in Warehouse */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5 relative overflow-hidden">
+              <div className={`p-4 rounded-2xl ${isStockCritical ? 'bg-rose-50 text-rose-600 animate-pulse' : 'bg-emerald-50 text-emerald-600'}`}>
+                <Package className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Sisa Stok Gudang</span>
+                <h3 className={`text-3xl font-black font-mono tracking-tight ${isStockCritical ? 'text-rose-600' : 'text-slate-900'}`}>
+                  {sisaStokGudang.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
+                </h3>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-lg border border-indigo-100/40 w-fit">
+                    {convertPacksToUnitsStr(sisaStokGudang)}
+                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9px] text-slate-400 font-bold font-mono">
+                      ({Number((sisaStokGudang / 10).toFixed(1))} Selop)
+                    </span>
+                    {isStockCritical ? (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md uppercase">
+                        ⚠️ Limit kritis!
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md uppercase">
+                        ✓ Stok Aman
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* KPI 2: Total Incoming Stock (Pabrik) */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
+              <div className="p-4 rounded-2xl bg-indigo-50 text-indigo-600">
+                <ArrowDownLeft className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Total Stok Masuk (Pabrik)</span>
+                <h3 className="text-3xl font-black text-slate-900 font-mono tracking-tight">
+                  {totalStockMasukPabrik.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
+                </h3>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-lg border border-indigo-100/40 w-fit">
+                    {convertPacksToUnitsStr(totalStockMasukPabrik)}
+                  </span>
+                  <span className="text-xs font-bold text-slate-700 mt-1">
+                    Nilai Keuangan: {formatIDR(totalStockMasukPabrik * 6000)}
+                  </span>
+                  <p className="text-[9px] text-slate-400 font-bold mt-0.5">
+                    Murni dari {stockEntries.filter(e => e.tipe === 'Masuk' && e.sumberTujuan === 'Pabrik Makayasa' && !e.isReversed).length} kali pengiriman pabrik
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* KPI 3: Total Outflow Stock (Sales - Bersih) */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
+              <div className="p-4 rounded-2xl bg-amber-50 text-amber-600">
+                <ArrowUpRight className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Total Stok Keluar (Sales - Bersih)</span>
+                <h3 className="text-3xl font-black text-slate-900 font-mono tracking-tight">
+                  {totalStockKeluarSalesBersih.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
+                </h3>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-bold text-amber-600 bg-amber-50/50 px-2 py-0.5 rounded-lg border border-amber-100/40 w-fit">
+                    {convertPacksToUnitsStr(totalStockKeluarSalesBersih)}
+                  </span>
+                  <span className="text-xs font-bold text-amber-600 mt-1">
+                    Formula Netto: Keluar - Pengembalian
+                  </span>
+                  <p className="text-[9px] text-slate-400 font-bold mt-0.5">
+                    Telah bersih disalurkan ke sales untuk distribusi pasar
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* KPI 2: Total Incoming Stock */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
-          <div className="p-4 rounded-2xl bg-indigo-50 text-indigo-600">
-            <ArrowDownLeft className="w-8 h-8" />
-          </div>
-          <div className="space-y-1">
-            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Total Stok Masuk (Pabrik)</span>
-            <h3 className="text-3xl font-black text-slate-900 font-mono tracking-tight">
-              {totalStockMasuk.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
-            </h3>
-            <p className="text-[10px] text-slate-500 font-bold">
-              Terhitung dari {stockEntries.filter(e => e.tipe === 'Masuk').length} kali restock pabrik
-            </p>
+        {/* Row 2: Evaluasi Distribusi Pasar & Sales */}
+        <div className="space-y-2">
+          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+            <Store className="w-3.5 h-3.5 text-teal-500" />
+            Evaluasi Distribusi Pasar & Sales
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* KPI 4: Sisa Stok di Tangan Sales */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
+              <div className="p-4 rounded-2xl bg-sky-50 text-sky-600">
+                <Users className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Sisa Stok di Tangan Sales</span>
+                <h3 className="text-3xl font-black text-slate-900 font-mono tracking-tight">
+                  {totalStokTanganSales.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
+                </h3>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-bold text-sky-600 bg-sky-50/50 px-2 py-0.5 rounded-lg border border-sky-100/40 w-fit">
+                    {convertPacksToUnitsStr(totalStokTanganSales)}
+                  </span>
+                  <span className="text-xs font-bold text-slate-700 mt-1">
+                    Stok Aktif di Lapangan
+                  </span>
+                  <p className="text-[9px] text-slate-400 font-bold mt-0.5">
+                    Formula: Total Keluar - (Penjualan + Tester)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* KPI 5: Total Penjualan Riil (Laku) */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
+              <div className="p-4 rounded-2xl bg-teal-50 text-teal-600">
+                <TrendingUp className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Total Penjualan Riil (Laku)</span>
+                <h3 className="text-3xl font-black text-slate-900 font-mono tracking-tight">
+                  {totalPenjualanRiil.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
+                </h3>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-bold text-teal-600 bg-teal-50/50 px-2 py-0.5 rounded-lg border border-teal-100/40 w-fit">
+                    {convertPacksToUnitsStr(totalPenjualanRiil)}
+                  </span>
+                  <span className="text-xs font-bold text-emerald-600 mt-1">
+                    Nilai Omset Pasar: {formatIDR(transactions.reduce((sum, tx) => sum + tx.omset, 0))}
+                  </span>
+                  <p className="text-[9px] text-slate-400 font-bold mt-0.5">
+                    Akumulasi penjualan riil dari {transactions.length} transaksi toko
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* KPI 6: Total Tester & Promosi */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
+              <div className="p-4 rounded-2xl bg-purple-50 text-purple-600">
+                <Gift className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Total Tester & Promosi</span>
+                <h3 className="text-3xl font-black text-slate-900 font-mono tracking-tight">
+                  {totalTesterPromo.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
+                </h3>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-bold text-purple-600 bg-purple-50/50 px-2 py-0.5 rounded-lg border border-purple-100/40 w-fit">
+                    {convertPacksToUnitsStr(totalTesterPromo)}
+                  </span>
+                  <span className="text-xs font-bold text-purple-600 mt-1">
+                    Beban Operasional HPP
+                  </span>
+                  <p className="text-[9px] text-slate-400 font-bold mt-0.5">
+                    Sampel rokok gratis dibagikan ke toko untuk promosi
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* KPI 3: Total Outflow Stock */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
-          <div className="p-4 rounded-2xl bg-amber-50 text-amber-600">
-            <ArrowUpRight className="w-8 h-8" />
-          </div>
-          <div className="space-y-1">
-            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Total Stok Keluar (Sales)</span>
-            <h3 className="text-3xl font-black text-slate-900 font-mono tracking-tight">
-              {totalStockKeluar.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
-            </h3>
-            <p className="text-[10px] text-slate-500 font-bold">
-              Telah disalurkan ke sales untuk penjualan pasar
-            </p>
-          </div>
-        </div>
-
       </div>
 
       {/* 3. Input Dual optional panel (Aplikasi / Spreadsheet) & Recharts Trend */}
@@ -818,29 +1021,49 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
                   </div>
                 </div>
 
+                {formType === 'Masuk' && (
+                  <div className="p-2.5 bg-indigo-50/50 rounded-xl text-[10px] text-indigo-700 font-medium flex items-start gap-1.5 border border-indigo-100/50">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                    <span>Form ini khusus mencatat stok masuk murni dari Pabrik Makayasa atau Koreksi Penyesuaian. Sisa pengembalian dari sales dicatat di menu Stok Sales.</span>
+                  </div>
+                )}
+
                 {/* Source / Destination */}
                 <div className="space-y-1">
                   <label className="text-xs font-extrabold text-slate-700 block">
-                    Pilihan Sumber / Tujuan Stok:
+                    {formType === 'Masuk' ? 'Pilihan Sumber Stok (Masuk ke Gudang):' : 'Pilihan Tujuan Stok (Keluar dari Gudang):'}
                   </label>
                   <select
                     value={formSource}
                     onChange={(e) => setFormSource(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
-                    <optgroup label="1. Pabrik">
-                      <option value="Pabrik Makayasa">Pabrik Makayasa</option>
-                    </optgroup>
-                    <optgroup label="2. Sales">
-                      {activeSales.map(sales => (
-                        <option key={sales} value={`Sales ${sales}`}>Sales {sales}</option>
-                      ))}
-                      <option value="Sales Umum">Sales Umum</option>
-                    </optgroup>
-                    <optgroup label="3. Retur">
-                      <option value="Retur Pasar">Retur Pasar</option>
-                      <option value="Retur Cacat">Retur Cacat / Rusak</option>
-                    </optgroup>
+                    {formType === 'Masuk' ? (
+                      <>
+                        <optgroup label="1. Penerimaan dari Pabrik">
+                          <option value="Pabrik Makayasa">Pabrik Makayasa (Pabrik Kirim ke Gudang)</option>
+                        </optgroup>
+                        <optgroup label="2. Penyesuaian / Koreksi">
+                          <option value="Koreksi Tambah">Koreksi Tambah (Penyesuaian Tambah Stok Gudang)</option>
+                        </optgroup>
+                      </>
+                    ) : (
+                      <>
+                        <optgroup label="1. Distribusi / Kirim ke Sales">
+                          {activeSales.map(sales => (
+                            <option key={sales} value={`Sales ${sales}`}>Kirim ke Sales {sales}</option>
+                          ))}
+                          <option value="Sales Umum">Sales Umum (Kirim ke Sales)</option>
+                        </optgroup>
+                        <optgroup label="2. Retur / Rusak Keluar">
+                          <option value="Retur Cacat">Retur Cacat / Rusak Keluar (Dibuang)</option>
+                          <option value="Retur Pasar">Retur Pasar Keluar</option>
+                        </optgroup>
+                        <optgroup label="3. Penyesuaian / Koreksi">
+                          <option value="Koreksi Kurang">Koreksi Kurang (Penyesuaian Kurang Stok Gudang)</option>
+                        </optgroup>
+                      </>
+                    )}
                   </select>
                 </div>
 

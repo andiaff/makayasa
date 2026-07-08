@@ -916,6 +916,7 @@ export default function PembukuanKeuangan() {
                     className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50/50 focus:outline-none focus:ring-1 focus:ring-rose-500"
                   >
                     <option value="Marketing">Marketing (Promosi, Banner, Sembako, Rokok Gratis)</option>
+                    <option value="Biaya Tester/Promosi">Biaya Tester/Promosi (Tester / Bonus Toko / Promo Sales)</option>
                     <option value="Transfer Pabrik">Transfer Pabrik (Pembelian rokok pusat)</option>
                     <option value="Operasional">Operasional (Bensin, Servis Motor, Parkir, Makan Lapangan)</option>
                     <option value="Gaji & Komisi">Gaji & Komisi (Gaji karyawan, insentif / komisi sales)</option>

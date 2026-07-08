@@ -41,6 +41,50 @@ const SYNC_KEYS: Record<string, string> = {
 
 const CONFIG_KEY = 'makayasa_owner_config';
 
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: null,
+      email: null,
+      emailVerified: null,
+      isAnonymous: null,
+      tenantId: null,
+      providerInfo: []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 // Flag to prevent infinite loop (server update triggering upload)
 let isSyncingFromServer = false;
 // Flag to prevent client's initial local state writes from overwriting Firestore server truth during startup reconciliation
@@ -90,6 +134,212 @@ function isDataEqual(a: any, b: any): boolean {
 }
 
 /**
+ * Sanitize item before uploading to Firestore to ensure absolute conformance with firestore.rules constraints
+ */
+function sanitizeUploadItem(collectionName: string, item: any): any {
+  // Deep copy the item to avoid modifying original local storage state in-memory
+  const cleaned = JSON.parse(JSON.stringify(item));
+
+  // Ensure 'id' is a string with size <= 128
+  if (!cleaned.id) {
+    cleaned.id = `GEN-${Math.random().toString(36).substring(2, 12)}`;
+  } else {
+    cleaned.id = String(cleaned.id).substring(0, 128);
+  }
+
+  if (collectionName === 'stok_gudang') {
+    // 1. Ensure required fields: id, tanggal, tipe, sumberTujuan, jumlah
+    
+    // tanggal: must be a string with size <= 128
+    if (cleaned.tanggal) {
+      if (typeof cleaned.tanggal === 'object') {
+        try {
+          cleaned.tanggal = new Date(cleaned.tanggal).toISOString().substring(0, 128);
+        } catch {
+          cleaned.tanggal = new Date().toISOString().substring(0, 128);
+        }
+      } else {
+        cleaned.tanggal = String(cleaned.tanggal).substring(0, 128);
+      }
+    } else {
+      cleaned.tanggal = new Date().toISOString().substring(0, 128);
+    }
+
+    // tipe: 'Masuk' | 'Keluar'
+    if (cleaned.tipe !== 'Masuk' && cleaned.tipe !== 'Keluar') {
+      cleaned.tipe = 'Keluar';
+    }
+
+    // sumberTujuan: string with size <= 128
+    if (cleaned.sumberTujuan) {
+      cleaned.sumberTujuan = String(cleaned.sumberTujuan).substring(0, 128);
+    } else {
+      cleaned.sumberTujuan = cleaned.tipe === 'Masuk' ? 'Pabrik Makayasa' : 'Sales Umum';
+    }
+
+    // jumlah: number with limit 1000000
+    if (typeof cleaned.jumlah !== 'number' || isNaN(cleaned.jumlah) || cleaned.jumlah < 0) {
+      cleaned.jumlah = Math.min(1000000, Math.max(0, parseInt(cleaned.jumlah as any, 10) || 0));
+    } else {
+      cleaned.jumlah = Math.min(1000000, cleaned.jumlah);
+    }
+
+    // 2. Ensure optional fields types
+    // keterangan: string <= 5000
+    if (cleaned.keterangan !== undefined && cleaned.keterangan !== null) {
+      cleaned.keterangan = String(cleaned.keterangan).substring(0, 5000);
+    }
+
+    // sumberInput: 'Aplikasi' | 'Spreadsheet'
+    if (cleaned.sumberInput !== undefined && cleaned.sumberInput !== null) {
+      if (cleaned.sumberInput !== 'Aplikasi' && cleaned.sumberInput !== 'Spreadsheet') {
+        cleaned.sumberInput = 'Aplikasi';
+      }
+    }
+
+    // hanyaSales: bool
+    if (cleaned.hanyaSales !== undefined && cleaned.hanyaSales !== null) {
+      cleaned.hanyaSales = Boolean(cleaned.hanyaSales);
+    }
+
+    // salesName: string <= 128
+    if (cleaned.salesName !== undefined && cleaned.salesName !== null) {
+      cleaned.salesName = String(cleaned.salesName).substring(0, 128);
+    }
+
+    // isReversed: bool
+    if (cleaned.isReversed !== undefined && cleaned.isReversed !== null) {
+      cleaned.isReversed = Boolean(cleaned.isReversed);
+    }
+
+    // reversedAt: string <= 128
+    if (cleaned.reversedAt !== undefined && cleaned.reversedAt !== null) {
+      cleaned.reversedAt = String(cleaned.reversedAt).substring(0, 128);
+    }
+  }
+
+  else if (collectionName === 'expenses') {
+    // Required: id, tanggal, kategori, nominal, keterangan
+    if (cleaned.tanggal) {
+      cleaned.tanggal = String(cleaned.tanggal).substring(0, 128);
+    } else {
+      cleaned.tanggal = new Date().toISOString().substring(0, 128);
+    }
+
+    const categories = ['Marketing', 'Transfer Pabrik', 'Operasional', 'Gaji & Komisi', 'Sewa & Logistik', 'Lainnya', 'Biaya Tester/Promosi'];
+    if (!categories.includes(cleaned.kategori)) {
+      cleaned.kategori = 'Lainnya';
+    }
+
+    if (typeof cleaned.nominal !== 'number' || isNaN(cleaned.nominal) || cleaned.nominal < 0) {
+      cleaned.nominal = parseFloat(cleaned.nominal as any) || 0;
+    }
+
+    if (cleaned.keterangan !== undefined && cleaned.keterangan !== null) {
+      cleaned.keterangan = String(cleaned.keterangan).substring(0, 10000);
+    } else {
+      cleaned.keterangan = 'Biaya pengeluaran operasional';
+    }
+  }
+
+  else if (collectionName === 'sales_deposits') {
+    // Required: id, tanggalSetor, salesName, tanggalMulaiPeriode, tanggalSelesaiPeriode, qtyPacksInPeriod, totalOmsetInPeriod, jumlahDisetor, selisihSetoran, statusSetoran
+    cleaned.tanggalSetor = String(cleaned.tanggalSetor || new Date().toISOString()).substring(0, 128);
+    cleaned.salesName = String(cleaned.salesName || 'Sales').substring(0, 128);
+    cleaned.tanggalMulaiPeriode = String(cleaned.tanggalMulaiPeriode || new Date().toISOString()).substring(0, 128);
+    cleaned.tanggalSelesaiPeriode = String(cleaned.tanggalSelesaiPeriode || new Date().toISOString()).substring(0, 128);
+
+    if (typeof cleaned.qtyPacksInPeriod !== 'number' || isNaN(cleaned.qtyPacksInPeriod) || cleaned.qtyPacksInPeriod < 0) {
+      cleaned.qtyPacksInPeriod = Math.min(1000000, Math.max(0, parseInt(cleaned.qtyPacksInPeriod as any, 10) || 0));
+    } else {
+      cleaned.qtyPacksInPeriod = Math.min(1000000, cleaned.qtyPacksInPeriod);
+    }
+
+    if (typeof cleaned.totalOmsetInPeriod !== 'number' || isNaN(cleaned.totalOmsetInPeriod)) {
+      cleaned.totalOmsetInPeriod = parseFloat(cleaned.totalOmsetInPeriod as any) || 0;
+    }
+
+    if (typeof cleaned.jumlahDisetor !== 'number' || isNaN(cleaned.jumlahDisetor)) {
+      cleaned.jumlahDisetor = parseFloat(cleaned.jumlahDisetor as any) || 0;
+    }
+
+    if (typeof cleaned.selisihSetoran !== 'number' || isNaN(cleaned.selisihSetoran)) {
+      cleaned.selisihSetoran = parseFloat(cleaned.selisihSetoran as any) || 0;
+    }
+
+    if (cleaned.statusSetoran !== 'Lunas' && cleaned.statusSetoran !== 'Kurang Setor' && cleaned.statusSetoran !== 'Lebih Setor') {
+      cleaned.statusSetoran = 'Lunas';
+    }
+
+    if (cleaned.keterangan !== undefined && cleaned.keterangan !== null) {
+      cleaned.keterangan = String(cleaned.keterangan).substring(0, 10000);
+    }
+
+    if (cleaned.archived !== undefined && cleaned.archived !== null) {
+      cleaned.archived = Boolean(cleaned.archived);
+    }
+  }
+
+  else if (collectionName === 'freelance_records') {
+    // Required: id, tanggalAmbil, namaFreelance, qtyPacks, pricePerPack, totalOmset, statusPembayaran, jumlahDibayar, kurangBayar
+    cleaned.tanggalAmbil = String(cleaned.tanggalAmbil || new Date().toISOString()).substring(0, 128);
+    cleaned.namaFreelance = String(cleaned.namaFreelance || 'Freelance').substring(0, 128);
+
+    if (typeof cleaned.qtyPacks !== 'number' || isNaN(cleaned.qtyPacks) || cleaned.qtyPacks < 0) {
+      cleaned.qtyPacks = Math.min(1000000, Math.max(0, parseInt(cleaned.qtyPacks as any, 10) || 0));
+    } else {
+      cleaned.qtyPacks = Math.min(1000000, cleaned.qtyPacks);
+    }
+
+    if (typeof cleaned.pricePerPack !== 'number' || isNaN(cleaned.pricePerPack) || cleaned.pricePerPack < 0) {
+      cleaned.pricePerPack = Math.min(1000000, Math.max(0, parseFloat(cleaned.pricePerPack as any) || 0));
+    } else {
+      cleaned.pricePerPack = Math.min(1000000, cleaned.pricePerPack);
+    }
+
+    if (typeof cleaned.totalOmset !== 'number' || isNaN(cleaned.totalOmset)) {
+      cleaned.totalOmset = parseFloat(cleaned.totalOmset as any) || 0;
+    }
+
+    if (cleaned.statusPembayaran !== 'Belum Bayar' && cleaned.statusPembayaran !== 'Cicil' && cleaned.statusPembayaran !== 'Lunas') {
+      cleaned.statusPembayaran = 'Belum Bayar';
+    }
+
+    if (typeof cleaned.jumlahDibayar !== 'number' || isNaN(cleaned.jumlahDibayar)) {
+      cleaned.jumlahDibayar = parseFloat(cleaned.jumlahDibayar as any) || 0;
+    }
+
+    if (typeof cleaned.kurangBayar !== 'number' || isNaN(cleaned.kurangBayar)) {
+      cleaned.kurangBayar = parseFloat(cleaned.kurangBayar as any) || 0;
+    }
+
+    if (cleaned.potongStokGudang !== undefined && cleaned.potongStokGudang !== null) {
+      cleaned.potongStokGudang = Boolean(cleaned.potongStokGudang);
+    }
+
+    if (cleaned.keterangan !== undefined && cleaned.keterangan !== null) {
+      cleaned.keterangan = String(cleaned.keterangan).substring(0, 10000);
+    }
+
+    if (cleaned.returPacks !== undefined && cleaned.returPacks !== null) {
+      if (typeof cleaned.returPacks !== 'number' || isNaN(cleaned.returPacks) || cleaned.returPacks < 0) {
+        cleaned.returPacks = parseFloat(cleaned.returPacks as any) || 0;
+      }
+    }
+
+    if (cleaned.tanggalLunas !== undefined && cleaned.tanggalLunas !== null) {
+      cleaned.tanggalLunas = String(cleaned.tanggalLunas).substring(0, 128);
+    }
+
+    if (cleaned.archived !== undefined && cleaned.archived !== null) {
+      cleaned.archived = Boolean(cleaned.archived);
+    }
+  }
+
+  return cleaned;
+}
+
+/**
  * Sync from client (localStorage) to Firestore server
  */
 async function syncLocalToServer(key: string, rawValue: string | null) {
@@ -114,13 +364,18 @@ async function syncLocalToServer(key: string, rawValue: string | null) {
         ownerInitials: 'KM',
         loginUsername: 'komandan',
         loginPassword: 'makayasajaya',
+        isConfigured: true,
         ...parsedConfig
       };
       
       // Coerce pricePerPack to a valid integer number
       completedConfig.pricePerPack = parseInt(completedConfig.pricePerPack as any, 10) || 6000;
       
-      await setDoc(doc(db, 'owner_config', 'global'), completedConfig);
+      try {
+        await setDoc(doc(db, 'owner_config', 'global'), completedConfig);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'owner_config/global');
+      }
       console.log('Firebase Sync: Config updated on server');
       return;
     }
@@ -130,10 +385,20 @@ async function syncLocalToServer(key: string, rawValue: string | null) {
 
     if (!rawValue) {
       // Key was removed, delete all docs in this collection
-      const snapshot = await getDocs(collection(db, collectionName));
+      let snapshot;
+      try {
+        snapshot = await getDocs(collection(db, collectionName));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, collectionName);
+        return;
+      }
       const batch = writeBatch(db);
       snapshot.docs.forEach(d => batch.delete(d.ref));
-      await batch.commit();
+      try {
+        await batch.commit();
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, collectionName);
+      }
       console.log(`Firebase Sync: Cleared collection ${collectionName} on server`);
       return;
     }
@@ -142,7 +407,13 @@ async function syncLocalToServer(key: string, rawValue: string | null) {
     if (!Array.isArray(localArray)) return;
 
     // Get current IDs on server to find deletions
-    const serverSnapshot = await getDocs(collection(db, collectionName));
+    let serverSnapshot;
+    try {
+      serverSnapshot = await getDocs(collection(db, collectionName));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, collectionName);
+      return;
+    }
     const serverIds = serverSnapshot.docs.map(d => d.id);
     const localIds = localArray.map((item: any) => item.id).filter(Boolean);
 
@@ -153,8 +424,14 @@ async function syncLocalToServer(key: string, rawValue: string | null) {
     // 1. Write or update local items to server
     localArray.forEach((item: any) => {
       if (item && item.id) {
-        const docRef = doc(db, collectionName, item.id);
-        batch.set(docRef, item);
+        let uploadItem = sanitizeUploadItem(collectionName, item);
+        
+        if (collectionName === 'expenses' && uploadItem.kategori === 'Biaya Tester/Promosi') {
+          uploadItem = { ...uploadItem, kategori: 'Marketing' };
+        }
+        
+        const docRef = doc(db, collectionName, uploadItem.id);
+        batch.set(docRef, uploadItem);
         operationCount++;
       }
     });
@@ -169,7 +446,11 @@ async function syncLocalToServer(key: string, rawValue: string | null) {
     });
 
     if (operationCount > 0) {
-      await batch.commit();
+      try {
+        await batch.commit();
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, collectionName);
+      }
       console.log(`Firebase Sync: Uploaded ${operationCount} changes for ${collectionName} to server`);
     }
   } catch (error) {
@@ -219,7 +500,13 @@ export function initializeFirebaseSync() {
 
       // B. Reconcile Collections (Sales Deposits, Expenses, Freelance, Stock)
       for (const [localKey, collectionName] of Object.entries(SYNC_KEYS)) {
-        const serverSnap = await getDocs(collection(db, collectionName));
+        let serverSnap;
+        try {
+          serverSnap = await getDocs(collection(db, collectionName));
+        } catch (err) {
+          handleFirestoreError(err, OperationType.GET, collectionName);
+          continue;
+        }
         const localDataRaw = localStorage.getItem(localKey);
         const localArray = localDataRaw ? JSON.parse(localDataRaw) : [];
 
@@ -233,7 +520,13 @@ export function initializeFirebaseSync() {
           // If server has records, we merge local and server records instead of a destructive overwrite.
           // This ensures that any records created on this client (e.g. sales deposits recorded offline or before syncing)
           // are safely merged and uploaded, rather than being wiped out!
-          const serverArray = serverSnap.docs.map(doc => doc.data());
+          const serverArray = serverSnap.docs.map(doc => {
+            const data = doc.data();
+            if (collectionName === 'expenses' && data.kategori === 'Marketing' && data.keterangan?.includes('Biaya Tester/Promosi')) {
+              data.kategori = 'Biaya Tester/Promosi';
+            }
+            return data;
+          });
           let mergedArray = [...localArray];
           let updated = false;
 
@@ -285,7 +578,13 @@ export function initializeFirebaseSync() {
             return;
           }
 
-          const serverData = snapshot.docs.map(doc => doc.data());
+          const serverData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            if (collectionName === 'expenses' && data.kategori === 'Marketing' && data.keterangan?.includes('Biaya Tester/Promosi')) {
+              data.kategori = 'Biaya Tester/Promosi';
+            }
+            return data;
+          });
           const currentLocalRaw = localStorage.getItem(localKey);
           const currentLocal = currentLocalRaw ? JSON.parse(currentLocalRaw) : [];
 
@@ -309,6 +608,8 @@ export function initializeFirebaseSync() {
         } catch (err) {
           console.error(`Firebase Sync: Error in listener for ${collectionName}`, err);
         }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, collectionName);
       });
     });
 
@@ -345,6 +646,8 @@ export function initializeFirebaseSync() {
       } catch (err) {
         console.error('Firebase Sync: Error in config listener', err);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'owner_config/global');
     });
   })();
 }
@@ -412,7 +715,13 @@ export async function forceManualSync(): Promise<{ success: boolean; message: st
       const serverSnap = await getDocs(collection(db, collectionName));
       const localDataRaw = localStorage.getItem(localKey);
       const localArray = localDataRaw ? JSON.parse(localDataRaw) : [];
-      const serverArray = serverSnap.docs.map(doc => doc.data());
+      const serverArray = serverSnap.docs.map(doc => {
+        const data = doc.data();
+        if (collectionName === 'expenses' && data.kategori === 'Marketing' && data.keterangan?.includes('Biaya Tester/Promosi')) {
+          data.kategori = 'Biaya Tester/Promosi';
+        }
+        return data;
+      });
 
       // Merge local and server data safely
       const mergedArray = mergeArraysById(localArray, serverArray);

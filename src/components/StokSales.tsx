@@ -55,23 +55,13 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
   const [selectedSales, setSelectedSales] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   
-  // Quick allocation form state
-  const [isAllocationOpen, setIsAllocationOpen] = useState<boolean>(false);
-  const [allocSales, setAllocSales] = useState<string>('');
-  const [allocQty, setAllocQty] = useState<string>('');
-  const [allocDate, setAllocDate] = useState<string>(new Date().toISOString().substring(0, 10));
-  const [allocDesc, setAllocDesc] = useState<string>('');
-  const [allocReduceGudang, setAllocReduceGudang] = useState<boolean>(true); // Default true
-  const [isFormSubmitted, setIsFormSubmitted] = useState<boolean>(false);
-
-  // Quick return form state
-  const [isReturnOpen, setIsReturnOpen] = useState<boolean>(false);
-  const [returnSales, setReturnSales] = useState<string>('');
+  // Quick Actions Form state
   const [returnQty, setReturnQty] = useState<string>('');
-  const [returnDate, setReturnDate] = useState<string>(new Date().toISOString().substring(0, 10));
-  const [returnDesc, setReturnDesc] = useState<string>('');
-  const [returnType, setReturnType] = useState<'sisa' | 'koreksi'>('sisa');
-  const [returnReduceGudang, setReturnReduceGudang] = useState<boolean>(true);
+  const [testerQty, setTesterQty] = useState<string>('');
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
+  // Form submission success indicator
+  const [isFormSubmitted, setIsFormSubmitted] = useState<boolean>(false);
 
   // Custom alert dialog state
   const [modalState, setModalState] = useState<{
@@ -109,11 +99,6 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
     loadStockEntries();
     if (loggedInSalesName) {
       setSelectedSales(loggedInSalesName);
-    }
-    // Set default sales for allocation and return dropdowns
-    if (salesNames && salesNames.length > 0) {
-      setAllocSales(salesNames[0]);
-      setReturnSales(salesNames[0]);
     }
   }, [salesNames, loggedInSalesName]);
 
@@ -161,7 +146,7 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
         
         if (!isWarehouseTx && !isDirectSalesStock) return false;
         
-        const dest = entry.sumberTujuan.toLowerCase().trim();
+        const dest = (entry.sumberTujuan || '').toLowerCase().trim();
         const sName = name.toLowerCase().trim();
         
         // Date filtration if viewMode is 'filtered'
@@ -248,6 +233,58 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
     };
   }, [salesMetrics]);
 
+  // Cumulative (unfiltered) allocation sum for all sales to show in "Total Drop dari Gudang"
+  const cumulativeTotalDrop = useMemo(() => {
+    const namesToUse = loggedInSalesName
+      ? salesNames.filter(name => name.toLowerCase().trim() === loggedInSalesName.toLowerCase().trim())
+      : salesNames;
+
+    return namesToUse.reduce((totalSum, name) => {
+      const allocations = stockEntries.filter(entry => {
+        const isWarehouseTx = !entry.hanyaSales;
+        const isDirectSalesStock = entry.hanyaSales === true;
+        
+        if (!isWarehouseTx && !isDirectSalesStock) return false;
+        
+        const dest = (entry.sumberTujuan || '').toLowerCase().trim();
+        const sName = name.toLowerCase().trim();
+        
+        // Always cumulative: NO viewMode/date filter!
+        const matchesSalesName = dest === sName || 
+                                 dest === `sales ${sName}` || 
+                                 dest === `penyesuaian ${sName}` || 
+                                 dest === `koreksi ${sName}` ||
+                                 dest === `pengembalian ${sName}` ||
+                                 (entry.salesName && entry.salesName.toLowerCase().trim() === sName);
+
+        return matchesSalesName;
+      });
+
+      const totalMasukSales = allocations.reduce((sum, entry) => {
+        const sign = entry.tipe === 'Masuk' ? -1 : 1;
+        return sum + (entry.jumlah * sign);
+      }, 0);
+
+      return totalSum + totalMasukSales;
+    }, 0);
+  }, [salesNames, stockEntries, loggedInSalesName]);
+
+  // Helper to convert packs into Bal, Selop, and Pack format
+  const convertPacksToUnitsStr = (packs: number): string => {
+    if (packs <= 0) return '0 Pack';
+    const bal = Math.floor(packs / 200);
+    const remainderAfterBal = packs % 200;
+    const selop = Math.floor(remainderAfterBal / 10);
+    const pack = remainderAfterBal % 10;
+    
+    const parts: string[] = [];
+    if (bal > 0) parts.push(`${bal} Bal`);
+    if (selop > 0) parts.push(`${selop} Selop`);
+    if (pack > 0) parts.push(`${pack} Pack`);
+    
+    return parts.join(' ');
+  };
+
   // Filtered sales metrics list based on search term
   const filteredSalesMetrics = useMemo(() => {
     if (!searchTerm.trim()) return salesMetrics;
@@ -276,7 +313,7 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
       const isDirectSalesStock = entry.hanyaSales === true;
 
       if (isWarehouseTx || isDirectSalesStock) {
-        const dest = entry.sumberTujuan.toLowerCase().trim();
+        const dest = (entry.sumberTujuan || '').toLowerCase().trim();
         const sName = selectedSales.toLowerCase().trim();
         
         const matchesSalesName = dest === sName || 
@@ -294,11 +331,15 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
             tanggal: new Date(entry.tanggal),
             tipe: isReturn ? 'Keluar' : 'Masuk', // Return reduces sales stock, so it's an outflow (Keluar) log
             sumberTujuan: isReturn
-              ? (entry.hanyaSales ? 'Koreksi Stok (Murni Sales)' : 'Kembali ke Gudang Utama')
+              ? (entry.hanyaSales 
+                  ? ((entry.id || '').startsWith('STK-TST-') ? 'Tester / Promo (Bonus)' : 'Koreksi Stok (Murni Sales)') 
+                  : 'Kembali ke Gudang Utama')
               : (entry.hanyaSales ? 'Penyesuaian (Murni Sales)' : 'Gudang Makayasa Utama'),
             jumlah: entry.jumlah,
             keterangan: entry.keterangan || (isReturn
-              ? (entry.hanyaSales ? 'Koreksi pengurangan stok murni sales' : 'Pengembalian sisa/koreksi stok sales ke gudang')
+              ? (entry.hanyaSales 
+                  ? ((entry.id || '').startsWith('STK-TST-') ? 'Pembagian tester rokok gratis ke outlet' : 'Koreksi pengurangan stok murni sales') 
+                  : 'Pengembalian sisa/koreksi stok sales ke gudang')
               : (entry.hanyaSales ? 'Input manual penyesuaian stok sales' : 'Distribusi stok dari gudang utama')),
             reference: entry.id,
             canDelete: entry.sumberInput === 'Aplikasi',
@@ -336,139 +377,191 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
       message: 'Apakah Anda yakin ingin membatalkan/menghapus pencatatan alokasi ini? Stok bawaan sales akan berkurang kembali, dan jika alokasi ini sebelumnya memotong stok Gudang Utama, maka sisa stok Gudang Utama akan otomatis dikembalikan.',
       type: 'confirm',
       onConfirm: () => {
+        const entryToDelete = stockEntries.find(e => e.id === entryId);
+        if (entryToDelete && entryToDelete.id && entryToDelete.id.startsWith('STK-TST-')) {
+          const suffix = entryToDelete.id.substring(8); // get the random number suffix
+          const targetExpenseId = `EXP-TST-${suffix}`;
+          
+          // Delete from expenses
+          const savedExpenses = localStorage.getItem('makayasa_expenses');
+          if (savedExpenses) {
+            try {
+              const parsed = JSON.parse(savedExpenses);
+              const filteredExpenses = parsed.filter((exp: any) => exp.id !== targetExpenseId);
+              localStorage.setItem('makayasa_expenses', JSON.stringify(filteredExpenses));
+              window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: 'makayasa_expenses' } }));
+            } catch (e) {
+              console.error('Error deleting corresponding tester expense:', e);
+            }
+          }
+        }
+
         const updated = stockEntries.filter(e => e.id !== entryId);
         saveEntries(updated);
         setModalState(prev => ({ ...prev, isOpen: false }));
+        
+        // Show delete success
+        setSuccessMessage('Catatan mutasi berhasil dihapus.');
+        setTimeout(() => setSuccessMessage(null), 5000);
       }
     });
   };
 
-  // --- ALLOCATION FORM SUBMISSION ---
-  const handleAllocateStock = (e: React.FormEvent) => {
+  // --- SALES QUICK ACTIONS STOK CALCULATIONS & HANDLERS ---
+  const selectedSalesSisaStok = useMemo(() => {
+    if (!selectedSales) return 0;
+    const found = salesMetrics.find(m => m.name.toLowerCase().trim() === selectedSales.toLowerCase().trim());
+    return found ? found.sisaStok : 0;
+  }, [salesMetrics, selectedSales]);
+
+  const handleReturnToWarehouse = (e: React.FormEvent) => {
     e.preventDefault();
-    const qty = parseInt(allocQty, 10);
-    if (isNaN(qty) || qty <= 0) {
-      setModalState({
-        isOpen: true,
-        title: 'Jumlah Tidak Valid',
-        message: 'Silakan isi jumlah volume pack dengan angka positif!',
-        type: 'alert',
-        onConfirm: () => setModalState(prev => ({ ...prev, isOpen: false }))
-      });
-      return;
-    }
-
-    if (!allocSales) {
-      setModalState({
-        isOpen: true,
-        title: 'Sales Belum Dipilih',
-        message: 'Silakan pilih sales penerima distribusi stok!',
-        type: 'alert',
-        onConfirm: () => setModalState(prev => ({ ...prev, isOpen: false }))
-      });
-      return;
-    }
-
-    const isHanyaSales = !allocReduceGudang;
-
-    const newWarehouseOutEntry: StockEntry = {
-      id: `STK-APP-${Date.now()}`,
-      tanggal: new Date(allocDate),
-      tipe: 'Keluar', // Outflow from warehouse view
-      sumberTujuan: isHanyaSales ? `Penyesuaian ${allocSales}` : `Sales ${allocSales}`,
-      jumlah: qty,
-      keterangan: allocDesc.trim() || (isHanyaSales 
-        ? `Penyesuaian stok awal/mandiri Sales ${allocSales} (tanpa potong Gudang)` 
-        : `Pemberian/Drop stok gudang ke Sales ${allocSales}`),
-      sumberInput: 'Aplikasi',
-      hanyaSales: isHanyaSales,
-      salesName: allocSales
-    };
-
-    const updated = [newWarehouseOutEntry, ...stockEntries];
-    saveEntries(updated);
-
-    // Reset Form
-    setAllocQty('');
-    setAllocDesc('');
-    setIsAllocationOpen(false);
-    setIsFormSubmitted(true);
-    setTimeout(() => setIsFormSubmitted(false), 3000);
-
-    setModalState({
-      isOpen: true,
-      title: isHanyaSales ? 'Penyesuaian Berhasil!' : 'Distribusi Berhasil!',
-      message: isHanyaSales
-        ? `Stok penyesuaian sebanyak ${qty} Pack berhasil dicatat untuk Sales ${allocSales} secara mandiri tanpa memotong sisa stok Gudang Utama.`
-        : `Stok sebanyak ${qty} Pack berhasil disalurkan ke Sales ${allocSales}. Sisa stok gudang utama berkurang, dan sisa stok sales bertambah secara otomatis.`,
-      type: 'alert',
-      onConfirm: () => setModalState(prev => ({ ...prev, isOpen: false }))
-    });
-  };
-
-  // --- RETURN / PENGEMBALIAN STOCK FORM SUBMISSION ---
-  const handleReturnStock = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loggedInSalesName) return; // STRICT GUARD: No return creation allowed from sales account!
+    if (!selectedSales) return;
     const qty = parseInt(returnQty, 10);
     if (isNaN(qty) || qty <= 0) {
-      setModalState({
-        isOpen: true,
-        title: 'Jumlah Tidak Valid',
-        message: 'Silakan isi jumlah volume pack dengan angka positif!',
-        type: 'alert',
-        onConfirm: () => setModalState(prev => ({ ...prev, isOpen: false }))
-      });
+      alert("Jumlah pengembalian harus lebih besar dari 0!");
       return;
     }
 
-    if (!returnSales) {
-      setModalState({
-        isOpen: true,
-        title: 'Sales Belum Dipilih',
-        message: 'Silakan pilih sales yang mengembalikan/menyesuaikan stok!',
-        type: 'alert',
-        onConfirm: () => setModalState(prev => ({ ...prev, isOpen: false }))
-      });
+    if (qty > selectedSalesSisaStok) {
+      alert(`⚠️ ERROR: Jumlah pengembalian (${qty} Pack) tidak boleh melebihi sisa stok sales yang tersedia (${selectedSalesSisaStok} Pack)!`);
       return;
     }
 
-    const isHanyaSales = !returnReduceGudang;
+    const confirmMsg = `Konfirmasi Pengembalian ke Gudang Utama:
+• Sales: ${selectedSales}
+• Jumlah: ${qty} Pack (${convertPacksToUnitsStr(qty)})
 
-    const newWarehouseInEntry: StockEntry = {
-      id: `STK-APP-${Date.now()}`,
-      tanggal: new Date(returnDate),
-      tipe: 'Masuk', // Inflow to warehouse
-      sumberTujuan: isHanyaSales ? `Koreksi ${returnSales}` : `Sales ${returnSales}`,
-      jumlah: qty,
-      keterangan: returnDesc.trim() || (returnType === 'koreksi'
-        ? `Koreksi kelebihan kirim Sales ${returnSales}${isHanyaSales ? ' (tidak masuk gudang)' : ''}`
-        : `Pengembalian sisa stok Sales ${returnSales}${isHanyaSales ? ' (tidak masuk gudang)' : ''}`),
-      sumberInput: 'Aplikasi',
-      hanyaSales: isHanyaSales,
-      salesName: returnSales
-    };
-
-    const updated = [newWarehouseInEntry, ...stockEntries];
-    saveEntries(updated);
-
-    // Reset Form
-    setReturnQty('');
-    setReturnDesc('');
-    setIsReturnOpen(false);
-    setIsFormSubmitted(true);
-    setTimeout(() => setIsFormSubmitted(false), 3000);
+Sisa stok sales akan dikurangi, dan stok Gudang Utama akan bertambah. Lanjutkan?`;
 
     setModalState({
       isOpen: true,
-      title: returnType === 'koreksi' ? 'Koreksi Berhasil!' : 'Pengembalian Berhasil!',
-      message: isHanyaSales
-        ? `Koreksi pengurangan stok sebanyak ${qty} Pack berhasil dicatat untuk Sales ${returnSales} secara mandiri tanpa menambah sisa stok Gudang Utama.`
-        : `Stok sebanyak ${qty} Pack berhasil dikembalikan oleh Sales ${returnSales} ke Gudang Utama. Sisa stok gudang utama bertambah, dan sisa stok sales berkurang secara otomatis.`,
-      type: 'alert',
-      onConfirm: () => setModalState(prev => ({ ...prev, isOpen: false }))
+      title: 'Konfirmasi Pengembalian Stok',
+      message: confirmMsg,
+      type: 'confirm',
+      onConfirm: () => {
+        // Create the StockEntry
+        const newEntry: StockEntry = {
+          id: `STK-RET-${Math.floor(10000 + Math.random() * 90000)}`,
+          tanggal: new Date(),
+          tipe: 'Masuk', // 'Masuk' to warehouse
+          sumberTujuan: `Sales ${selectedSales}`,
+          jumlah: qty,
+          keterangan: `Pengembalian sisa stok ke gudang utama oleh Sales ${selectedSales}`,
+          sumberInput: 'Aplikasi',
+          salesName: selectedSales,
+          hanyaSales: false // Crucial: affects warehouse as well!
+        };
+
+        const updatedEntries = [newEntry, ...stockEntries];
+        saveEntries(updatedEntries);
+        setReturnQty('');
+        setModalState(prev => ({ ...prev, isOpen: false }));
+        
+        // Show success
+        setSuccessMessage(`Berhasil mengembalikan ${qty} Pack ke Gudang Utama.`);
+        setTimeout(() => setSuccessMessage(null), 5000);
+      }
     });
   };
+
+  const handleTesterPromo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSales) return;
+    const qty = parseInt(testerQty, 10);
+    if (isNaN(qty) || qty <= 0) {
+      alert("Jumlah tester/promo harus lebih besar dari 0!");
+      return;
+    }
+
+    if (qty > selectedSalesSisaStok) {
+      alert(`⚠️ ERROR: Jumlah tester/promo (${qty} Pack) tidak boleh melebihi sisa stok sales yang tersedia (${selectedSalesSisaStok} Pack)!`);
+      return;
+    }
+
+    // Resolve HPP price from config or use 6000 default
+    const configRaw = localStorage.getItem('makayasa_owner_config');
+    let hppPrice = 6000;
+    if (configRaw) {
+      try {
+        const parsedConfig = JSON.parse(configRaw);
+        if (parsedConfig.pricePerPack) {
+          hppPrice = parseInt(parsedConfig.pricePerPack, 10) || 6000;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    const confirmMsg = `Konfirmasi Catat Tester / Promo (Bonus Toko):
+• Sales: ${selectedSales}
+• Jumlah: ${qty} Pack (${convertPacksToUnitsStr(qty)})
+• Nilai Beban (HPP): Rp ${hppPrice.toLocaleString('id-ID')} * ${qty} = Rp ${(hppPrice * qty).toLocaleString('id-ID')}
+
+Sisa stok sales akan dikurangi, dan biaya operasional non-kas (Biaya Tester/Promosi) sebesar nominal HPP akan otomatis dicatat di Pembukuan Keuangan. Lanjutkan?`;
+
+    const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+
+    setModalState({
+      isOpen: true,
+      title: 'Konfirmasi Pencatatan Tester/Promo',
+      message: confirmMsg,
+      type: 'confirm',
+      onConfirm: () => {
+        // 1. Create the StockEntry for sales reduction (hanyaSales: true)
+        const newStockEntry: StockEntry = {
+          id: `STK-TST-${randomSuffix}`,
+          tanggal: new Date(),
+          tipe: 'Masuk', // 'Masuk' with hanyaSales: true and sign = -1 decreases sales stock
+          sumberTujuan: `Sales ${selectedSales}`,
+          jumlah: qty,
+          keterangan: `Pengeluaran Tester / Promo oleh Sales ${selectedSales}`,
+          sumberInput: 'Aplikasi',
+          salesName: selectedSales,
+          hanyaSales: true // Crucial: ONLY affects sales stock, NOT warehouse stock!
+        };
+
+        // 2. Create the ExpenseRecord
+        const newExpense = {
+          id: `EXP-TST-${randomSuffix}`,
+          tanggal: new Date().toISOString(),
+          kategori: 'Biaya Tester/Promosi' as any,
+          nominal: qty * hppPrice,
+          keterangan: `Biaya Tester/Promosi (Non-Kas) - Sales ${selectedSales} (${qty} Pack @Rp ${hppPrice.toLocaleString('id-ID')})`
+        };
+
+        // Save stock entry
+        const updatedEntries = [newStockEntry, ...stockEntries];
+        saveEntries(updatedEntries);
+
+        // Save expense record
+        const savedExpenses = localStorage.getItem('makayasa_expenses');
+        let expensesList = [];
+        if (savedExpenses) {
+          try {
+            expensesList = JSON.parse(savedExpenses);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        expensesList = [newExpense, ...expensesList];
+        localStorage.setItem('makayasa_expenses', JSON.stringify(expensesList));
+        
+        // Dispatch event for expense record sync & update
+        window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: 'makayasa_expenses' } }));
+        window.dispatchEvent(new Event('storage'));
+
+        setTesterQty('');
+        setModalState(prev => ({ ...prev, isOpen: false }));
+        
+        // Show success
+        setSuccessMessage(`Berhasil mencatat ${qty} Pack Tester/Promo dan membukukan biaya sebesar Rp ${(qty * hppPrice).toLocaleString('id-ID')}.`);
+        setTimeout(() => setSuccessMessage(null), 5000);
+      }
+    });
+  };
+
+  // Replaced manual return & allocate handlers with a single unified warehouse entry flow
 
   // Helper format currency IDR
   const formatIDR = (num: number) => {
@@ -526,26 +619,14 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
           </div>
 
           {!loggedInSalesName && (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => {
-                  if (salesNames.length > 0) setReturnSales(salesNames[0]);
-                  setIsReturnOpen(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md shadow-amber-600/10 transition-all hover:scale-[1.02]"
-              >
-                <ArrowDownRight className="w-4 h-4" /> Tarik / Terima Pengembalian
-              </button>
-              
-              <button
-                onClick={() => {
-                  if (salesNames.length > 0) setAllocSales(salesNames[0]);
-                  setIsAllocationOpen(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-600/10 transition-all hover:scale-[1.02]"
-              >
-                <Plus className="w-4 h-4" /> Bagi Stok Sales
-              </button>
+            <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200/60 rounded-2xl">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+              <span className="text-[10px] font-black text-slate-500 tracking-tight leading-none uppercase">
+                Satu Pintu:
+              </span>
+              <span className="text-[11px] font-bold text-slate-600 leading-none">
+                Distribusi &amp; Pengembalian sisa stok sepenuhnya dikelola dari menu <span className="text-indigo-600 font-extrabold">Stok Gudang</span>
+              </span>
             </div>
           )}
         </div>
@@ -558,8 +639,15 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
         <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
             <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Total Drop dari Gudang</p>
-            <h4 className="text-2xl font-black text-slate-900 tracking-tight">{globalSummary.totalMasuk} <span className="text-xs text-slate-400">Pack</span></h4>
-            <p className="text-[10px] text-indigo-500 font-bold">Stok yang dipegang sales</p>
+            <h4 className="text-2xl font-black text-slate-900 tracking-tight">
+              {cumulativeTotalDrop.toLocaleString('id-ID')} <span className="text-xs text-slate-400 font-sans">Pack</span>
+            </h4>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50/60 px-2 py-0.5 rounded-lg border border-indigo-100/40 w-fit">
+                {convertPacksToUnitsStr(cumulativeTotalDrop)}
+              </span>
+              <p className="text-[9px] text-slate-400 font-bold mt-0.5">Kumulatif, tidak terpengaruh filter waktu</p>
+            </div>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
             <Truck className="w-6 h-6" />
@@ -570,8 +658,15 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
         <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
             <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Total Terjual di Toko</p>
-            <h4 className="text-2xl font-black text-slate-900 tracking-tight">{globalSummary.totalKeluar} <span className="text-xs text-slate-400">Pack</span></h4>
-            <p className="text-[10px] text-emerald-600 font-bold">Berhasil terjual ke pasar</p>
+            <h4 className="text-2xl font-black text-slate-900 tracking-tight">
+              {globalSummary.totalKeluar.toLocaleString('id-ID')} <span className="text-xs text-slate-400 font-sans">Pack</span>
+            </h4>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50/60 px-2 py-0.5 rounded-lg border border-emerald-100/40 w-fit">
+                {convertPacksToUnitsStr(globalSummary.totalKeluar)}
+              </span>
+              <p className="text-[9px] text-slate-400 font-bold mt-0.5">Sesuai filter waktu aktif</p>
+            </div>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <TrendingUp className="w-6 h-6" />
@@ -582,8 +677,15 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
         <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
             <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Total Sisa Stok Sales</p>
-            <h4 className="text-2xl font-black text-indigo-600 tracking-tight">{globalSummary.sisaStok} <span className="text-xs text-slate-400">Pack</span></h4>
-            <p className="text-[10px] text-slate-500 font-bold">Sisa di tangan semua sales</p>
+            <h4 className="text-2xl font-black text-indigo-600 tracking-tight">
+              {globalSummary.sisaStok.toLocaleString('id-ID')} <span className="text-xs text-slate-400 font-sans">Pack</span>
+            </h4>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-bold text-amber-600 bg-amber-50/60 px-2 py-0.5 rounded-lg border border-amber-100/40 w-fit">
+                {convertPacksToUnitsStr(globalSummary.sisaStok)}
+              </span>
+              <p className="text-[9px] text-slate-400 font-bold mt-0.5">Sisa riil di lapangan</p>
+            </div>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center">
             <Package className="w-6 h-6" />
@@ -860,17 +962,11 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
           </div>
 
           {!loggedInSalesName && (
-            <div className="pt-4 border-t border-slate-100 text-center">
-              <p className="text-[11px] font-bold text-slate-700 mb-2">Ingin menambah stok untuk sales?</p>
-              <button
-                onClick={() => {
-                  if (salesNames.length > 0) setAllocSales(salesNames[0]);
-                  setIsAllocationOpen(true);
-                }}
-                className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-600 rounded-xl text-xs font-black transition-colors"
-              >
-                + Buat Pengiriman Baru ke Sales
-              </button>
+            <div className="pt-4 border-t border-slate-100 text-center space-y-2">
+              <p className="text-[11px] font-bold text-slate-700">Ingin mendistribusikan atau menerima pengembalian stok?</p>
+              <p className="text-[10px] text-slate-400 font-semibold leading-tight px-2">
+                Silakan beralih ke tab <strong className="text-indigo-600 font-bold">Stok Gudang</strong> untuk membuat pencatatan masuk/keluar baru.
+              </p>
             </div>
           )}
         </div>
@@ -900,6 +996,96 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
                 >
                   Tutup [X]
                 </button>
+              </div>
+
+              {/* Success Message Banner */}
+              <AnimatePresence>
+                {successMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="p-3.5 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-2xl text-xs font-semibold flex items-center gap-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>{successMessage}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Quick Actions Panel */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100/80">
+                {/* Return to Warehouse Form */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-100/70 shadow-sm flex flex-col justify-between space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                        <Truck className="w-4 h-4" />
+                      </div>
+                      <h5 className="text-xs font-black text-slate-800 uppercase tracking-wider">Kembalikan ke Gudang Utama</h5>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+                      Kembalikan sisa fisik rokok di tangan sales {selectedSales} ke Gudang Utama. Ini akan otomatis mengurangi stok bawaan sales dan menambah stok Gudang Utama.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleReturnToWarehouse} className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        max={selectedSalesSisaStok}
+                        placeholder={`Maks ${selectedSalesSisaStok} Pack`}
+                        value={returnQty}
+                        onChange={(e) => setReturnQty(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl transition-all shadow-sm shadow-indigo-600/10 shrink-0"
+                    >
+                      Proses Retur
+                    </button>
+                  </form>
+                </div>
+
+                {/* Tester / Promo Form */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-100/70 shadow-sm flex flex-col justify-between space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className="p-1.5 rounded-lg bg-amber-50 text-amber-600">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <h5 className="text-xs font-black text-slate-800 uppercase tracking-wider">Tester & Promo (Bonus Toko)</h5>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+                      Catat pengeluaran rokok bawaan sales {selectedSales} untuk tester, promosi, atau bonus toko. Stok sales berkurang, dan biayanya otomatis dibukukan di laporan keuangan.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleTesterPromo} className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        max={selectedSalesSisaStok}
+                        placeholder={`Maks ${selectedSalesSisaStok} Pack`}
+                        value={testerQty}
+                        onChange={(e) => setTesterQty(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs rounded-xl transition-all shadow-sm shadow-amber-500/10 shrink-0"
+                    >
+                      Catat Tester
+                    </button>
+                  </form>
+                </div>
               </div>
 
               <div className="overflow-x-auto rounded-2xl border border-slate-100/80 w-full">
@@ -956,7 +1142,7 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
                             {log.keterangan}
                           </td>
                           <td className="py-2.5 px-4 text-center">
-                            {log.canDelete && !loggedInSalesName ? (
+                            {(!loggedInSalesName && log.reference && stockEntries.some(e => e.id === log.reference)) ? (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteAllocation(log.id)}
@@ -986,286 +1172,7 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
         )}
       </AnimatePresence>
 
-      {/* Quick Allocation Dialog Modal */}
-      <AnimatePresence>
-        {isAllocationOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl p-6 max-w-md w-full border border-slate-100 shadow-2xl space-y-4"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
-                    <Truck className="w-5 h-5" />
-                  </span>
-                  <h4 className="text-base font-black text-slate-950 tracking-tight">
-                    Drop / Kirim Stok ke Sales
-                  </h4>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsAllocationOpen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-600 text-sm font-bold"
-                >
-                  [X]
-                </button>
-              </div>
 
-              <form onSubmit={handleAllocateStock} className="space-y-4 text-left">
-                {/* Sales list drop down */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">Pilih Sales Penerima:</label>
-                  <select
-                    value={allocSales}
-                    onChange={(e) => setAllocSales(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    {salesNames.map(name => (
-                      <option key={name} value={name}>Sales {name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Allocated qty */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">Jumlah Drop (Pack):</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    placeholder="Contoh: 100"
-                    value={allocQty}
-                    onChange={(e) => setAllocQty(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-
-                {/* Allocated date */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">Tanggal Transaksi:</label>
-                  <input
-                    type="date"
-                    required
-                    value={allocDate}
-                    onChange={(e) => setAllocDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-
-                {/* Reduce warehouse stock toggle */}
-                <div className="flex items-start gap-2.5 bg-slate-50 border border-slate-200/80 rounded-xl p-3 select-none">
-                  <input
-                    type="checkbox"
-                    id="allocReduceGudang"
-                    checked={allocReduceGudang}
-                    onChange={(e) => setAllocReduceGudang(e.target.checked)}
-                    className="w-4 h-4 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 accent-indigo-600 cursor-pointer shrink-0"
-                  />
-                  <div className="flex-1">
-                    <label htmlFor="allocReduceGudang" className="text-xs font-black text-slate-700 cursor-pointer block leading-tight">
-                      Kurangi Stok Gudang Utama
-                    </label>
-                    <span className="text-[10px] text-slate-400 font-semibold block leading-tight mt-0.5">
-                      {allocReduceGudang 
-                        ? "Mengurangi sisa stok di Gudang Utama secara otomatis." 
-                        : "Hanya menambah stok sales (misal: untuk stok awal/titipan yang sudah ada)."}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Optional description */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">Keterangan / Catatan:</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Contoh: Alokasi drop stok awal minggu atau Ambil di gudang"
-                    value={allocDesc}
-                    onChange={(e) => setAllocDesc(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
-                  />
-                </div>
-
-                <div className="flex gap-2.5 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsAllocationOpen(false)}
-                    className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-colors shadow-sm"
-                  >
-                    Kirim Stok
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Quick Return Dialog Modal */}
-      <AnimatePresence>
-        {isReturnOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl p-6 max-w-md w-full border border-slate-100 shadow-2xl space-y-4"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-amber-50 text-amber-600">
-                    <ArrowDownRight className="w-5 h-5" />
-                  </span>
-                  <h4 className="text-base font-black text-slate-950 tracking-tight">
-                    Tarik / Terima Pengembalian Stok Sales
-                  </h4>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsReturnOpen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-600 text-sm font-bold"
-                >
-                  [X]
-                </button>
-              </div>
-
-              <form onSubmit={handleReturnStock} className="space-y-4 text-left">
-                {/* Return type selector */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">Tipe Pengembalian / Koreksi:</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setReturnType('sisa');
-                        setReturnDesc('Pengembalian sisa stok sales akhir periode');
-                      }}
-                      className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all ${
-                        returnType === 'sisa'
-                          ? 'bg-amber-50 border-amber-200 text-amber-700 font-extrabold'
-                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      Pengembalian Sisa
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setReturnType('koreksi');
-                        setReturnDesc('Koreksi kelebihan kirim (salah input/salah kirim)');
-                      }}
-                      className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all ${
-                        returnType === 'koreksi'
-                          ? 'bg-amber-50 border-amber-200 text-amber-700 font-extrabold'
-                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      Koreksi Kelebihan
-                    </button>
-                  </div>
-                </div>
-
-                {/* Sales list drop down */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">Pilih Sales:</label>
-                  <select
-                    value={returnSales}
-                    onChange={(e) => setReturnSales(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  >
-                    {salesNames.map(name => (
-                      <option key={name} value={name}>Sales {name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Return qty */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">Jumlah Kembalian (Pack):</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    placeholder="Contoh: 50"
-                    value={returnQty}
-                    onChange={(e) => setReturnQty(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  />
-                </div>
-
-                {/* Return date */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">Tanggal Transaksi:</label>
-                  <input
-                    type="date"
-                    required
-                    value={returnDate}
-                    onChange={(e) => setReturnDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  />
-                </div>
-
-                {/* Add to warehouse stock toggle */}
-                <div className="flex items-start gap-2.5 bg-slate-50 border border-slate-200/80 rounded-xl p-3 select-none">
-                  <input
-                    type="checkbox"
-                    id="returnReduceGudang"
-                    checked={returnReduceGudang}
-                    onChange={(e) => setReturnReduceGudang(e.target.checked)}
-                    className="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-slate-300 accent-amber-600 cursor-pointer shrink-0"
-                  />
-                  <div className="flex-1">
-                    <label htmlFor="returnReduceGudang" className="text-xs font-black text-slate-700 cursor-pointer block leading-tight">
-                      Kembalikan ke Stok Gudang Utama
-                    </label>
-                    <span className="text-[10px] text-slate-400 font-semibold block leading-tight mt-0.5">
-                      {returnReduceGudang 
-                        ? "Menambah sisa stok di Gudang Utama secara otomatis karena barang fisik dikembalikan." 
-                        : "Hanya mengurangi sisa stok sales (misal: penyesuaian/koreksi kesalahan tanpa mengembalikan barang ke gudang)."}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Optional description */}
-                <div className="space-y-1">
-                  <label className="text-xs font-black text-slate-700">Keterangan / Catatan:</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Tulis alasan pengembalian..."
-                    value={returnDesc}
-                    onChange={(e) => setReturnDesc(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
-                  />
-                </div>
-
-                <div className="flex gap-2.5 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsReturnOpen(false)}
-                    className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs transition-colors shadow-sm"
-                  >
-                    Terima Pengembalian
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Custom Confirmation / Alert Dialog Modal */}
       <AnimatePresence>

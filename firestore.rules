@@ -48,7 +48,7 @@ service cloud.firestore {
       return data.keys().hasAll(['id', 'tanggal', 'kategori', 'nominal', 'keterangan'])
         && isStringWithSize(data.id, 128)
         && isStringWithSize(data.tanggal, 128)
-        && (data.kategori == 'Marketing' || data.kategori == 'Transfer Pabrik' || data.kategori == 'Operasional' || data.kategori == 'Gaji & Komisi' || data.kategori == 'Sewa & Logistik' || data.kategori == 'Lainnya')
+        && (data.kategori == 'Marketing' || data.kategori == 'Transfer Pabrik' || data.kategori == 'Operasional' || data.kategori == 'Gaji & Komisi' || data.kategori == 'Sewa & Logistik' || data.kategori == 'Lainnya' || data.kategori == 'Biaya Tester/Promosi')
         && data.nominal is number
         && isStringWithSize(data.keterangan, 10000);
     }

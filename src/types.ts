@@ -131,7 +131,7 @@ export interface SalesDeposit {
 export interface ExpenseRecord {
   id: string;
   tanggal: Date;
-  kategori: 'Marketing' | 'Transfer Pabrik' | 'Operasional' | 'Gaji & Komisi' | 'Sewa & Logistik' | 'Lainnya';
+  kategori: 'Marketing' | 'Transfer Pabrik' | 'Operasional' | 'Gaji & Komisi' | 'Sewa & Logistik' | 'Lainnya' | 'Biaya Tester/Promosi';
   nominal: number;
   keterangan: string;
 }

@@ -104,18 +104,20 @@ export default function PenjualanSales({ transactions, salesNames }: PenjualanSa
     }).sort((a, b) => b.totalPacks - a.totalPacks); // Sort highest packs first
   };
 
-  const performanceData = getSalesPerformance();
+  const performanceData = React.useMemo(() => {
+    return getSalesPerformance();
+  }, [transactions]);
 
   const [selectedSales, setSelectedSales] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (performanceData.length > 0) {
       const names = performanceData.map(s => s.name);
-      if (!selectedSales || !names.includes(selectedSales)) {
+      if (!selectedSales) {
+        setSelectedSales(performanceData[0].name);
+      } else if (!names.includes(selectedSales)) {
         setSelectedSales(performanceData[0].name);
       }
-    } else {
-      setSelectedSales(null);
     }
   }, [performanceData, selectedSales]);
 

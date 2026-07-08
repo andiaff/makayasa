@@ -439,7 +439,7 @@ export async function syncTabToSpreadsheet(appScriptUrl: string, localKey: strin
         
         // Auto-extract salesName if missing but destination points to a Sales
         if (!newItem.salesName && newItem.sumberTujuan) {
-          const dest = newItem.sumberTujuan.trim();
+          const dest = String(newItem.sumberTujuan).trim();
           if (dest.toLowerCase().startsWith('sales ')) {
             const parts = dest.split(' ');
             if (parts.length >= 2) {

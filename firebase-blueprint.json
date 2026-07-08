@@ -27,7 +27,7 @@
       "properties": {
         "id": { "type": "string" },
         "tanggal": { "type": "string" },
-        "kategori": { "type": "string", "enum": ["Marketing", "Transfer Pabrik", "Operasional", "Gaji & Komisi", "Sewa & Logistik", "Lainnya"] },
+        "kategori": { "type": "string", "enum": ["Marketing", "Transfer Pabrik", "Operasional", "Gaji & Komisi", "Sewa & Logistik", "Lainnya", "Biaya Tester/Promosi"] },
         "nominal": { "type": "number" },
         "keterangan": { "type": "string" }
       },
