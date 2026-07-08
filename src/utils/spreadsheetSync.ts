@@ -67,6 +67,42 @@ export function queueTabSync(appScriptUrl: string, key: string, dataArray: any[]
 // Subscriptions for state updates
 const updateCallbacks: Record<string, () => void> = {};
 
+// Helper to check if two values are deeply equal, handling key order in objects and sorting arrays by ID to verify stable content equality
+function isDataEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (typeof a !== typeof b) return false;
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    const getStableKey = (item: any) => {
+      if (item && typeof item === 'object') {
+        return item.id || JSON.stringify(item);
+      }
+      return String(item);
+    };
+    const sortedA = [...a].sort((x, y) => getStableKey(x).localeCompare(getStableKey(y)));
+    const sortedB = [...b].sort((x, y) => getStableKey(x).localeCompare(getStableKey(y)));
+    for (let i = 0; i < sortedA.length; i++) {
+      if (!isDataEqual(sortedA[i], sortedB[i])) return false;
+    }
+    return true;
+  }
+
+  if (typeof a === 'object' && typeof b === 'object') {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (const key of keysA) {
+      if (!keysB.includes(key)) return false;
+      if (!isDataEqual(a[key], b[key])) return false;
+    }
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Process fetched spreadsheet tab data and map it back into corresponding localStorage keys safely.
  */
@@ -105,8 +141,8 @@ export function updateLocalStatesFromData(allData: any, isManual = false): numbe
         if (newItem.qtyPacks !== undefined) newItem.qtyPacks = parseInt(newItem.qtyPacks, 10) || 0;
         if (newItem.pricePerPack !== undefined) newItem.pricePerPack = parseFloat(newItem.pricePerPack) || 0;
         if (newItem.totalOmset !== undefined) newItem.totalOmset = parseFloat(newItem.totalOmset) || 0;
-        if (newItem.jumlahDibayar !== undefined) newItem.jumlahDibayar = parseFloat(newItem.jumlahDibayar) || 0;
-        if (newItem.kurangBayar !== undefined) newItem.kurangBayar = parseFloat(newItem.kurangBayar) || 0;
+        if (newItem.jumlahDibayar !== undefined) newItem.jumlahDibayar = parseInt(newItem.jumlahDibayar, 10) || 0;
+        if (newItem.kurangBayar !== undefined) newItem.kurangBayar = parseInt(newItem.kurangBayar, 10) || 0;
         
         if (newItem.nominal !== undefined) newItem.nominal = parseFloat(newItem.nominal) || 0;
         
@@ -124,21 +160,29 @@ export function updateLocalStatesFromData(allData: any, isManual = false): numbe
         cleanedData = cleanedData.filter((item: any) => item.id && String(item.id).startsWith('EXP-'));
       }
 
-      // Safe merge logic: only write spreadsheet data on startup if local state is empty
-      const localDataRaw = localStorage.getItem(localKey);
-      const hasLocalData = localDataRaw && JSON.parse(localDataRaw).length > 0;
+      // Check if there is a pending local write currently debouncing or uploading
+      const hasPendingWrite = debounceTimers[localKey] || activeSyncPromises[localKey];
 
-      if (isManual || !hasLocalData) {
-        const prevSyncActive = (window as any).__makayasa_sync_active;
-        (window as any).__makayasa_sync_active = true;
-        
-        localStorage.setItem(localKey, JSON.stringify(cleanedData));
-        
-        (window as any).__makayasa_sync_active = prevSyncActive;
-        updatedCount++;
-        
-        // Trigger React component re-render
-        window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: localKey } }));
+      if (!hasPendingWrite) {
+        const localDataRaw = localStorage.getItem(localKey);
+        const localData = localDataRaw ? JSON.parse(localDataRaw) : [];
+
+        // Dynamic update check: if local state is different from the spreadsheet, overwrite local state with spreadsheet truth
+        if (isManual || !isDataEqual(localData, cleanedData)) {
+          console.log(`[SpreadsheetSync] Updating local state for "${localKey}" from spreadsheet (length: ${cleanedData.length})`);
+          const prevSyncActive = (window as any).__makayasa_sync_active;
+          (window as any).__makayasa_sync_active = true;
+          
+          localStorage.setItem(localKey, JSON.stringify(cleanedData));
+          
+          (window as any).__makayasa_sync_active = prevSyncActive;
+          updatedCount++;
+          
+          // Trigger React component re-render
+          window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: localKey } }));
+        }
+      } else {
+        console.log(`[SpreadsheetSync] Skipping spreadsheet update for "${localKey}" because of an active pending local write.`);
       }
     }
   });

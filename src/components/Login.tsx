@@ -153,9 +153,8 @@ export default function Login({ onLoginSuccess, config }: LoginProps) {
           {/* Motivational Quote Card - Option A (Simple, Powerful, Eye-catching) */}
           <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 shadow-sm relative overflow-hidden group hover:border-amber-200 transition-all">
             <div className="absolute top-0 right-0 w-16 h-16 bg-amber-100/30 rounded-full blur-xl -mr-4 -mt-4 transition-all" />
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Motto Perjuangan Sales</p>
             <p className="text-sm text-slate-850 font-extrabold tracking-wide font-sans">
-              IKHTIAR • KERJA KERAS • SABAR • SUKSES
+              KERJA KERAS • SABAR • SUKSES
             </p>
             <p className="text-[10px] text-slate-500 mt-1.5 font-medium italic">
               "Kerja keras tidak akan mengkhianati hasil, semua atas izin Allah SWT."
