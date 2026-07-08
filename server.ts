@@ -5,6 +5,20 @@ import https from "https";
 import http from "http";
 import { URL } from "url";
 
+// Keep-Alive Agents for connection pooling and TLS handshake reuse, significantly accelerating consecutive request hops
+const keepAliveHttpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 100,
+  maxFreeSockets: 10,
+  timeout: 90000
+});
+const keepAliveHttpAgent = new http.Agent({
+  keepAlive: true,
+  maxSockets: 100,
+  maxFreeSockets: 10,
+  timeout: 90000
+});
+
 // Secure HTTP/HTTPS request proxy using native Node.js http/https modules with built-in manual redirect and timeout handling.
 // This is highly robust, avoids undici fetch socket-leak/timeout issues in sandboxed container environments, and follows 302 Found redirects perfectly.
 function requestWithRedirects(
@@ -40,7 +54,8 @@ function requestWithRedirects(
         const options: https.RequestOptions = {
           method: currentMethod,
           headers: headers,
-          timeout: 60000, // 60 seconds timeout for a single hop
+          timeout: 90000, // 90 seconds timeout for a single hop to allow slow Google Sheets response
+          agent: parsedUrl.protocol === "https:" ? keepAliveHttpsAgent : keepAliveHttpAgent,
         };
 
         const req = protocol.request(parsedUrl, options, (res) => {
@@ -171,8 +186,34 @@ async function startServer() {
         delete bodyCopy.url; // Remove the proxy-specific url field to avoid polluting the Apps Script payload
       }
 
-      console.log(`[PROXY] Sending ${req.method} to: ${url}`);
-      const proxyResult = await requestWithRedirects(url, req.method, bodyCopy);
+      let proxyResult;
+      let lastError: any;
+      const maxAttempts = 3;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          console.log(`[PROXY] Sending ${req.method} to: ${url} (Attempt ${attempt}/${maxAttempts})`);
+          proxyResult = await requestWithRedirects(url, req.method, bodyCopy);
+          lastError = null;
+          break; // success, break out of retry loop
+        } catch (error: any) {
+          lastError = error;
+          console.error(`[PROXY ATTEMPT ${attempt} FAILED]:`, error.message || error);
+          const isRetryable = error.message?.includes("Timeout") || 
+                              error.message?.includes("timeout") || 
+                              error.message?.includes("ECONNRESET") ||
+                              error.message?.includes("ETIMEDOUT");
+          if (!isRetryable || attempt === maxAttempts) {
+            throw error;
+          }
+          const delay = 500 * attempt;
+          console.log(`[PROXY RETRY] Waiting ${delay}ms before next attempt...`);
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
+
+      if (!proxyResult) {
+        throw lastError || new Error("Failed to get proxy result");
+      }
 
       if (proxyResult.status >= 400) {
         // If Google Apps Script returned a specific error payload in text form, handle it gracefully

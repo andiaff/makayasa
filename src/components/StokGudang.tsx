@@ -575,18 +575,50 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
   };
 
   // --- DERIVED METRICS ---
+
+  // Helper to identify if a stock entry is sales-only / tester & promo
+  const isHanyaSalesEntry = (e: StockEntry) => {
+    if (e.hanyaSales) return true;
+    if (e.id && e.id.startsWith('STK-TST-')) return true;
+    const desc = (e.keterangan || '').toLowerCase();
+    if (desc.includes('tester') || desc.includes('promo') || desc.includes('promosi') || desc.includes('sampel')) {
+      return true;
+    }
+    return false;
+  };
+
+  // Helper to identify if a stock entry is related to a sales or freelance agent
+  const isSalesOrFreelanceEntry = (e: StockEntry) => {
+    if (e.salesName && e.salesName !== 'Sales Tak Dikenal') return true;
+    if (!e.sumberTujuan) return false;
+    const destLower = e.sumberTujuan.toLowerCase().trim();
+    if (destLower.startsWith('sales ') || destLower === 'sales umum' || destLower === 'sales_umum') return true;
+    if (destLower.startsWith('freelance') || destLower.includes('freelance')) return true;
+    
+    const descLower = (e.keterangan || '').toLowerCase();
+    if (descLower.includes('freelance')) return true;
+
+    // Check if dest matches any of the sales names
+    if (salesNames && salesNames.length > 0) {
+      return salesNames.some(name => {
+        const sName = name.toLowerCase().trim();
+        return destLower === sName || destLower === `sales ${sName}`;
+      });
+    }
+    return false;
+  };
   
   // Total incoming stock
   const totalStockMasuk = useMemo(() => {
     return stockEntries
-      .filter(e => e.tipe === 'Masuk' && !e.hanyaSales && !e.isReversed)
+      .filter(e => e.tipe === 'Masuk' && !isHanyaSalesEntry(e) && !e.isReversed)
       .reduce((sum, e) => sum + e.jumlah, 0);
   }, [stockEntries]);
 
   // Total outgoing stock
   const totalStockKeluar = useMemo(() => {
     return stockEntries
-      .filter(e => e.tipe === 'Keluar' && !e.hanyaSales && !e.isReversed)
+      .filter(e => e.tipe === 'Keluar' && !isHanyaSalesEntry(e) && !e.isReversed)
       .reduce((sum, e) => sum + e.jumlah, 0);
   }, [stockEntries]);
 
@@ -602,18 +634,18 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
       .reduce((sum, e) => sum + e.jumlah, 0);
   }, [stockEntries]);
 
-  // Total outgoing stock murni ke Sales (Netto) = Kirim Sales - Pengembalian Sales
+  // Total outgoing stock murni ke Sales & Freelance (Netto) = Kirim - Pengembalian
   const totalStockKeluarSalesBersih = useMemo(() => {
     const totalKeluarSales = stockEntries
-      .filter(e => e.tipe === 'Keluar' && !e.isReversed && e.sumberTujuan && (e.sumberTujuan.startsWith('Sales ') || e.sumberTujuan === 'Sales Umum'))
+      .filter(e => e.tipe === 'Keluar' && !e.isReversed && !isHanyaSalesEntry(e) && isSalesOrFreelanceEntry(e))
       .reduce((sum, e) => sum + e.jumlah, 0);
     
     const totalPengembalianSales = stockEntries
-      .filter(e => e.tipe === 'Masuk' && !e.isReversed && e.sumberTujuan && (e.sumberTujuan.startsWith('Sales ') || e.sumberTujuan === 'Sales Umum'))
+      .filter(e => e.tipe === 'Masuk' && !e.isReversed && !isHanyaSalesEntry(e) && isSalesOrFreelanceEntry(e))
       .reduce((sum, e) => sum + e.jumlah, 0);
 
     return Math.max(0, totalKeluarSales - totalPengembalianSales);
-  }, [stockEntries]);
+  }, [stockEntries, salesNames]);
 
   // Total actual sales made by all sales agents (Penjualan riil di pasar)
   const totalPenjualanRiil = useMemo(() => {
@@ -623,7 +655,7 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
   // Total free testers / promos distributed by all sales agents
   const totalTesterPromo = useMemo(() => {
     return stockEntries
-      .filter(e => e.hanyaSales && e.id && e.id.startsWith('STK-TST-') && !e.isReversed)
+      .filter(e => !e.isReversed && isHanyaSalesEntry(e))
       .reduce((sum, e) => sum + e.jumlah, 0);
   }, [stockEntries]);
 
@@ -655,7 +687,7 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
   const filteredEntries = useMemo(() => {
     return stockEntries.filter(entry => {
       // Exclude sales-specific entries from the warehouse ledger
-      if (entry.hanyaSales) return false;
+      if (isHanyaSalesEntry(entry)) return false;
 
       // 1. Search term (by Source or Description)
       const matchesSearch = 
@@ -685,7 +717,7 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
     const dailyPoints: Record<string, number> = {};
 
     chronological.forEach(entry => {
-      if (entry.hanyaSales || entry.isReversed) return;
+      if (isHanyaSalesEntry(entry) || entry.isReversed) return;
       const entryDate = entry.tanggal instanceof Date ? entry.tanggal : new Date(entry.tanggal);
       const dateStr = entryDate.toISOString().substring(0, 10);
       const diff = entry.tipe === 'Masuk' ? entry.jumlah : -entry.jumlah;
@@ -710,7 +742,7 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
   const outletOutflowData = useMemo(() => {
     const map: Record<string, number> = {};
     stockEntries
-      .filter(e => e.tipe === 'Keluar' && !e.isReversed && !e.hanyaSales)
+      .filter(e => e.tipe === 'Keluar' && !e.isReversed && !isHanyaSalesEntry(e))
       .forEach(e => {
         const key = e.sumberTujuan || 'Lainnya';
         map[key] = (map[key] || 0) + e.jumlah;
@@ -826,13 +858,13 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
               </div>
             </div>
 
-            {/* KPI 3: Total Outflow Stock (Sales - Bersih) */}
+            {/* KPI 3: Total Outflow Stock (Sales & Freelance - Netto) */}
             <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
               <div className="p-4 rounded-2xl bg-amber-50 text-amber-600">
                 <ArrowUpRight className="w-8 h-8" />
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Total Stok Keluar (Sales - Bersih)</span>
+                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Total Stok Keluar (Sales & Freelance - Netto)</span>
                 <h3 className="text-3xl font-black text-slate-900 font-mono tracking-tight">
                   {totalStockKeluarSalesBersih.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
                 </h3>
@@ -844,7 +876,7 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
                     Formula Netto: Keluar - Pengembalian
                   </span>
                   <p className="text-[9px] text-slate-400 font-bold mt-0.5">
-                    Telah bersih disalurkan ke sales untuk distribusi pasar
+                    Telah bersih disalurkan ke sales dan freelance untuk distribusi pasar
                   </p>
                 </div>
               </div>
@@ -858,31 +890,7 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
             <Store className="w-3.5 h-3.5 text-teal-500" />
             Evaluasi Distribusi Pasar & Sales
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* KPI 4: Sisa Stok di Tangan Sales */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
-              <div className="p-4 rounded-2xl bg-sky-50 text-sky-600">
-                <Users className="w-8 h-8" />
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Sisa Stok di Tangan Sales</span>
-                <h3 className="text-3xl font-black text-slate-900 font-mono tracking-tight">
-                  {totalStokTanganSales.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-400 font-sans">Pack</span>
-                </h3>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-bold text-sky-600 bg-sky-50/50 px-2 py-0.5 rounded-lg border border-sky-100/40 w-fit">
-                    {convertPacksToUnitsStr(totalStokTanganSales)}
-                  </span>
-                  <span className="text-xs font-bold text-slate-700 mt-1">
-                    Stok Aktif di Lapangan
-                  </span>
-                  <p className="text-[9px] text-slate-400 font-bold mt-0.5">
-                    Formula: Total Keluar - (Penjualan + Tester)
-                  </p>
-                </div>
-              </div>
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* KPI 5: Total Penjualan Riil (Laku) */}
             <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
               <div className="p-4 rounded-2xl bg-teal-50 text-teal-600">

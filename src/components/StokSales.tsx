@@ -326,21 +326,26 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
 
         if (matchesSalesName) {
           const isReturn = entry.tipe === 'Masuk';
+          const isHanyaSales = entry.hanyaSales || 
+                               (entry.id || '').startsWith('STK-TST-') || 
+                               (entry.keterangan || '').toLowerCase().includes('tester') || 
+                               (entry.keterangan || '').toLowerCase().includes('promo');
+                               
           logs.push({
             id: entry.id,
             tanggal: new Date(entry.tanggal),
             tipe: isReturn ? 'Keluar' : 'Masuk', // Return reduces sales stock, so it's an outflow (Keluar) log
             sumberTujuan: isReturn
-              ? (entry.hanyaSales 
-                  ? ((entry.id || '').startsWith('STK-TST-') ? 'Tester / Promo (Bonus)' : 'Koreksi Stok (Murni Sales)') 
+              ? (isHanyaSales 
+                  ? ((entry.id || '').startsWith('STK-TST-') || (entry.keterangan || '').toLowerCase().includes('tester') || (entry.keterangan || '').toLowerCase().includes('promo') ? 'Tester / Promo (Bonus)' : 'Koreksi Stok (Murni Sales)') 
                   : 'Kembali ke Gudang Utama')
-              : (entry.hanyaSales ? 'Penyesuaian (Murni Sales)' : 'Gudang Makayasa Utama'),
+              : (isHanyaSales ? 'Penyesuaian (Murni Sales)' : 'Gudang Makayasa Utama'),
             jumlah: entry.jumlah,
             keterangan: entry.keterangan || (isReturn
-              ? (entry.hanyaSales 
-                  ? ((entry.id || '').startsWith('STK-TST-') ? 'Pembagian tester rokok gratis ke outlet' : 'Koreksi pengurangan stok murni sales') 
+              ? (isHanyaSales 
+                  ? ((entry.id || '').startsWith('STK-TST-') || (entry.keterangan || '').toLowerCase().includes('tester') || (entry.keterangan || '').toLowerCase().includes('promo') ? 'Pembagian tester rokok gratis ke outlet' : 'Koreksi pengurangan stok murni sales') 
                   : 'Pengembalian sisa/koreksi stok sales ke gudang')
-              : (entry.hanyaSales ? 'Input manual penyesuaian stok sales' : 'Distribusi stok dari gudang utama')),
+              : (isHanyaSales ? 'Input manual penyesuaian stok sales' : 'Distribusi stok dari gudang utama')),
             reference: entry.id,
             canDelete: entry.sumberInput === 'Aplikasi',
             hanyaSales: entry.hanyaSales
