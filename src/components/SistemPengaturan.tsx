@@ -25,7 +25,7 @@ import {
   Server
 } from 'lucide-react';
 import { AppConfig, SalesAccount } from '../types';
-import { Trash2, UserPlus, Users } from 'lucide-react';
+import { Trash2, UserPlus, Users, Edit2, Check, X as LucideX } from 'lucide-react';
 import { 
   initializeFirebaseSync, 
   disableFirebaseSync, 
@@ -55,6 +55,7 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
   // Login credentials state inputs
   const [loginUsername, setLoginUsername] = useState(config.loginUsername || 'komandan');
   const [loginPassword, setLoginPassword] = useState(config.loginPassword || 'makayasajaya');
+  const [serverBaseUrlInput, setServerBaseUrlInput] = useState(config.serverBaseUrl || '');
 
   // Sales accounts state inputs
   const [salesAccounts, setSalesAccounts] = useState<SalesAccount[]>(config.salesAccounts || []);
@@ -63,10 +64,44 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
   const [newSalesPass, setNewSalesPass] = useState('');
   const [salesError, setSalesError] = useState('');
 
+  // States for inline editing of Sales Accounts
+  const [editingSalesId, setEditingSalesId] = useState<string | null>(null);
+  const [editSalesName, setEditSalesName] = useState('');
+  const [editSalesUser, setEditSalesUser] = useState('');
+  const [editSalesPass, setEditSalesPass] = useState('');
+
   // Sync local salesAccounts state when config.salesAccounts updates from elsewhere or on mount
+  // Also perform proactive auto-correct for the specific swapped "anwari" account if detected.
   useEffect(() => {
     if (config.salesAccounts) {
-      setSalesAccounts(config.salesAccounts);
+      let needsAutoCorrect = false;
+      const corrected = config.salesAccounts.map(sa => {
+        // Detect if Nama Sales is lowercase "anwari", Username is "anwari1234", and Password is "Anwari" (the exact swapped state from screenshot)
+        if (
+          sa.salesName === 'anwari' &&
+          sa.username === 'anwari1234' &&
+          sa.password === 'Anwari'
+        ) {
+          needsAutoCorrect = true;
+          return {
+            ...sa,
+            salesName: 'Anwari',
+            username: 'anwari',
+            password: 'anwari1234'
+          };
+        }
+        return sa;
+      });
+
+      if (needsAutoCorrect) {
+        setSalesAccounts(corrected);
+        setConfig({
+          ...config,
+          salesAccounts: corrected
+        });
+      } else {
+        setSalesAccounts(config.salesAccounts);
+      }
     }
   }, [config.salesAccounts]);
 
@@ -251,6 +286,54 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
     });
   };
 
+  const handleStartEdit = (sa: SalesAccount) => {
+    setEditingSalesId(sa.id);
+    setEditSalesName(sa.salesName);
+    setEditSalesUser(sa.username);
+    setEditSalesPass(sa.password);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSalesId(null);
+  };
+
+  const handleSaveEdit = (id: string) => {
+    if (!editSalesName.trim() || !editSalesUser.trim() || !editSalesPass.trim()) {
+      alert('Semua kolom edit harus diisi.');
+      return;
+    }
+
+    // Check if username already exists in other accounts
+    const otherUserExists = salesAccounts.some(
+      sa => sa.id !== id && sa.username.toLowerCase().trim() === editSalesUser.toLowerCase().trim()
+    );
+    if (otherUserExists || editSalesUser.toLowerCase().trim() === loginUsername.toLowerCase().trim()) {
+      alert('Username sudah digunakan oleh akun lain.');
+      return;
+    }
+
+    const updatedAccounts = salesAccounts.map(sa => {
+      if (sa.id === id) {
+        return {
+          ...sa,
+          salesName: editSalesName.trim(),
+          username: editSalesUser.trim(),
+          password: editSalesPass.trim()
+        };
+      }
+      return sa;
+    });
+
+    setSalesAccounts(updatedAccounts);
+    setEditingSalesId(null);
+
+    // Auto-save immediately to the application configuration
+    setConfig({
+      ...config,
+      salesAccounts: updatedAccounts
+    });
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setConfig({
@@ -266,7 +349,8 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
       ownerInitials,
       loginUsername,
       loginPassword,
-      salesAccounts
+      salesAccounts,
+      serverBaseUrl: serverBaseUrlInput
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -364,6 +448,33 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
             />
           </div>
           <span className="text-[10px] text-slate-400 block font-medium">Beban omset penjualan dihitung berdasarkan: <strong>Volume Penjualan * Harga Jual per Pack</strong></span>
+        </div>
+
+        {/* SECTION: PENGATURAN MOBILE APP / ANDROID */}
+        <div className="pt-5 border-t border-slate-100 space-y-4">
+          <div>
+            <h5 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-indigo-600">
+              <Smartphone className="w-4 h-4 text-indigo-500" />
+              <span>Pengaturan Aplikasi Mobile (Android / Play Store)</span>
+            </h5>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              Konfigurasi server jembatan agar aplikasi mobile Android Anda dapat melakukan sinkronisasi data secara langsung meskipun dibungkus sebagai aplikasi (.APK)
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold text-slate-600 block">URL Server Utama (Vercel / Cloud Run):</label>
+            <input
+              type="url"
+              value={serverBaseUrlInput}
+              onChange={(e) => setServerBaseUrlInput(e.target.value)}
+              placeholder="Contoh: https://nama-proyek-anda.vercel.app"
+              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-700 font-mono"
+            />
+            <span className="text-[10px] text-slate-400 block font-medium">
+              Masukkan domain tempat web ini dihosting (misalnya link Vercel Anda). Ketika sales menggunakan aplikasi Android, request API akan diteruskan ke server ini untuk mem-bypass batasan CORS.
+            </span>
+          </div>
         </div>
 
         {/* SECTION: BRAND & PROFILE CUSTOMIZATION */}
@@ -495,6 +606,9 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
                 <label className="text-[10px] font-semibold text-slate-600 block">Nama Sales (Sesuai Spreadsheet):</label>
                 <input
                   type="text"
+                  id="new_sales_name_input"
+                  name="new_sales_name"
+                  autoComplete="off"
                   value={newSalesName}
                   onChange={(e) => setNewSalesName(e.target.value)}
                   placeholder="Contoh: Rico"
@@ -505,6 +619,9 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
                 <label className="text-[10px] font-semibold text-slate-600 block">Username Login:</label>
                 <input
                   type="text"
+                  id="new_sales_user_input"
+                  name="new_sales_user"
+                  autoComplete="off"
                   value={newSalesUser}
                   onChange={(e) => setNewSalesUser(e.target.value)}
                   placeholder="Contoh: rico"
@@ -515,6 +632,9 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
                 <label className="text-[10px] font-semibold text-slate-600 block">Kata Sandi:</label>
                 <input
                   type="text"
+                  id="new_sales_pass_input"
+                  name="new_sales_pass"
+                  autoComplete="new-password"
                   value={newSalesPass}
                   onChange={(e) => setNewSalesPass(e.target.value)}
                   placeholder="rico123"
@@ -550,23 +670,90 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-medium">
-                  {salesAccounts.map((sa) => (
-                    <tr key={sa.id} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-2.5 font-bold text-slate-900">{sa.salesName}</td>
-                      <td className="px-4 py-2.5 font-mono">{sa.username}</td>
-                      <td className="px-4 py-2.5 font-mono text-slate-400">{sa.password}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveSalesAccount(sa.id)}
-                          className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
-                          title="Hapus Akun"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {salesAccounts.map((sa) => {
+                    const isEditing = editingSalesId === sa.id;
+                    return (
+                      <tr key={sa.id} className="hover:bg-slate-50/50">
+                        {isEditing ? (
+                          <>
+                            <td className="px-4 py-1.5">
+                              <input
+                                type="text"
+                                value={editSalesName}
+                                onChange={(e) => setEditSalesName(e.target.value)}
+                                className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-700"
+                                placeholder="Nama Sales"
+                              />
+                            </td>
+                            <td className="px-4 py-1.5 font-mono">
+                              <input
+                                type="text"
+                                value={editSalesUser}
+                                onChange={(e) => setEditSalesUser(e.target.value)}
+                                className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-700 font-mono"
+                                placeholder="Username"
+                              />
+                            </td>
+                            <td className="px-4 py-1.5 font-mono">
+                              <input
+                                type="text"
+                                value={editSalesPass}
+                                onChange={(e) => setEditSalesPass(e.target.value)}
+                                className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-700 font-mono"
+                                placeholder="Kata Sandi"
+                              />
+                            </td>
+                            <td className="px-4 py-1.5 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEdit(sa.id)}
+                                  className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                                  title="Simpan Perubahan"
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEdit}
+                                  className="p-1 text-slate-500 hover:bg-slate-100 rounded transition-colors"
+                                  title="Batal"
+                                >
+                                  <LucideX className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-4 py-2.5 font-bold text-slate-900">{sa.salesName}</td>
+                            <td className="px-4 py-2.5 font-mono">{sa.username}</td>
+                            <td className="px-4 py-2.5 font-mono text-slate-400">{sa.password}</td>
+                            <td className="px-4 py-2.5 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEdit(sa)}
+                                  className="p-1 text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                                  title="Edit Akun"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSalesAccount(sa.id)}
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                  title="Hapus Akun"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

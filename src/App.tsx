@@ -19,6 +19,7 @@ import {
   formatDateIndo
 } from './utils/spreadsheetParser';
 import { fetchAllFromSpreadsheet, updateLocalStatesFromData } from './utils/spreadsheetSync';
+import { getApiUrl } from './utils/apiUrl';
 
 // Import Modular Components
 import Login from './components/Login';
@@ -499,7 +500,7 @@ export default function App() {
 
           let response;
           try {
-            const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(targetUrl)}`;
+            const proxyUrl = getApiUrl(`/api/proxy-appscript?url=${encodeURIComponent(targetUrl)}`);
             response = await fetchWithTimeout(proxyUrl, 60000);
             if (!response.ok && response.status === 404) {
               // Fallback to direct browser fetch if the proxy endpoint returns 404 (e.g. on Vercel static)
@@ -667,7 +668,7 @@ export default function App() {
         
         let response;
         try {
-          const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(csvUrl)}`;
+          const proxyUrl = getApiUrl(`/api/proxy-appscript?url=${encodeURIComponent(csvUrl)}`);
           response = await fetchWithTimeout(proxyUrl, 60000);
           if (!response.ok && response.status === 404) {
             console.log("[SYNC] Proxy API returned 404 for CSV. Fetching spreadsheet CSV directly...");
@@ -802,7 +803,7 @@ export default function App() {
 
       let res;
       try {
-        const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(cleanedUrl)}`;
+        const proxyUrl = getApiUrl(`/api/proxy-appscript?url=${encodeURIComponent(cleanedUrl)}`);
         res = await testFetchWithTimeout(proxyUrl, 60000);
         if (!res.ok && res.status === 404) {
           console.log("[TEST] Proxy API returned 404 (running on Vercel). Fetching Apps Script directly from browser...");

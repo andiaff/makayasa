@@ -79,6 +79,7 @@ export interface AppConfig {
   loginUsername?: string;
   loginPassword?: string;
   salesAccounts?: SalesAccount[];
+  serverBaseUrl?: string;
 }
 
 export interface StockEntry {

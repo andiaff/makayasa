@@ -1,0 +1,15 @@
+{
+  "appId": "com.makayasa.salesapp",
+  "appName": "Makayasa Sales App",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": [
+      "*"
+    ]
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

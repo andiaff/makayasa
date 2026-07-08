@@ -4,6 +4,7 @@
  */
 
 import { AppConfig } from '../types';
+import { getApiUrl } from './apiUrl';
 
 // Map localStorage keys to spreadsheet tab names
 export const SYNC_KEYS_MAP: Record<string, string> = {
@@ -170,7 +171,7 @@ export async function fetchAllFromSpreadsheet(appScriptUrl: string, isManual = f
     }
 
     const separator = targetUrl.includes('?') ? '&' : '?';
-    const fetchUrl = `/api/proxy-appscript?url=${encodeURIComponent(targetUrl + separator + 'action=read_all')}`;
+    const fetchUrl = getApiUrl(`/api/proxy-appscript?url=${encodeURIComponent(targetUrl + separator + 'action=read_all')}`);
     let response = await fetch(fetchUrl);
     
     if (!response.ok && response.status === 404) {
@@ -236,7 +237,7 @@ async function syncSingleTabDirect(appScriptUrl: string, tabName: string, dataAr
       data: dataArray
     };
 
-    let response = await fetch('/api/proxy-appscript', {
+    let response = await fetch(getApiUrl('/api/proxy-appscript'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

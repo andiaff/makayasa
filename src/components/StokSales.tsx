@@ -64,6 +64,15 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
   const [allocReduceGudang, setAllocReduceGudang] = useState<boolean>(true); // Default true
   const [isFormSubmitted, setIsFormSubmitted] = useState<boolean>(false);
 
+  // Quick return form state
+  const [isReturnOpen, setIsReturnOpen] = useState<boolean>(false);
+  const [returnSales, setReturnSales] = useState<string>('');
+  const [returnQty, setReturnQty] = useState<string>('');
+  const [returnDate, setReturnDate] = useState<string>(new Date().toISOString().substring(0, 10));
+  const [returnDesc, setReturnDesc] = useState<string>('');
+  const [returnType, setReturnType] = useState<'sisa' | 'koreksi'>('sisa');
+  const [returnReduceGudang, setReturnReduceGudang] = useState<boolean>(true);
+
   // Custom alert dialog state
   const [modalState, setModalState] = useState<{
     isOpen: boolean;
@@ -101,9 +110,10 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
     if (loggedInSalesName) {
       setSelectedSales(loggedInSalesName);
     }
-    // Set default sales for allocation dropdown
+    // Set default sales for allocation and return dropdowns
     if (salesNames && salesNames.length > 0) {
       setAllocSales(salesNames[0]);
+      setReturnSales(salesNames[0]);
     }
   }, [salesNames, loggedInSalesName]);
 
@@ -144,12 +154,12 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
       ? salesNames.filter(name => name.toLowerCase().trim() === loggedInSalesName.toLowerCase().trim())
       : salesNames;
     return namesToUse.map(name => {
-      // 1. Calculate Stok Masuk to this sales (warehouse stock out to this sales OR direct adjustments)
+      // 1. Calculate Net Stok Masuk to this sales (warehouse stock out to this sales MINUS returns to warehouse/corrections)
       const allocations = stockEntries.filter(entry => {
-        const isWarehouseOutToSales = entry.tipe === 'Keluar' && !entry.hanyaSales;
+        const isWarehouseTx = !entry.hanyaSales;
         const isDirectSalesStock = entry.hanyaSales === true;
         
-        if (!isWarehouseOutToSales && !isDirectSalesStock) return false;
+        if (!isWarehouseTx && !isDirectSalesStock) return false;
         
         const dest = entry.sumberTujuan.toLowerCase().trim();
         const sName = name.toLowerCase().trim();
@@ -176,12 +186,17 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
         const matchesSalesName = dest === sName || 
                                  dest === `sales ${sName}` || 
                                  dest === `penyesuaian ${sName}` || 
+                                 dest === `koreksi ${sName}` ||
+                                 dest === `pengembalian ${sName}` ||
                                  (entry.salesName && entry.salesName.toLowerCase().trim() === sName);
 
         return matchesSalesName;
       });
 
-      const totalMasuk = allocations.reduce((sum, entry) => sum + entry.jumlah, 0);
+      const totalMasuk = allocations.reduce((sum, entry) => {
+        const sign = entry.tipe === 'Masuk' ? -1 : 1;
+        return sum + (entry.jumlah * sign);
+      }, 0);
 
       // 2. Calculate Stok Keluar from sales (sales transactions to stores)
       // This is automatically aggregated from transactions
@@ -255,28 +270,36 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
       hanyaSales?: boolean;
     }[] = [];
 
-    // 1. Add Warehouse allocations (Inflow to Sales)
+    // 1. Add Warehouse allocations and returns (Inflow/Outflow to Sales)
     stockEntries.forEach(entry => {
-      const isWarehouseOutToSales = entry.tipe === 'Keluar' && !entry.hanyaSales;
+      const isWarehouseTx = !entry.hanyaSales;
       const isDirectSalesStock = entry.hanyaSales === true;
 
-      if (isWarehouseOutToSales || isDirectSalesStock) {
+      if (isWarehouseTx || isDirectSalesStock) {
         const dest = entry.sumberTujuan.toLowerCase().trim();
         const sName = selectedSales.toLowerCase().trim();
         
         const matchesSalesName = dest === sName || 
                                  dest === `sales ${sName}` || 
                                  dest === `penyesuaian ${sName}` || 
+                                 dest === `koreksi ${sName}` ||
+                                 dest === `pengembalian ${sName}` ||
+                                 dest === `pengembalian sales ${sName}` ||
                                  (entry.salesName && entry.salesName.toLowerCase().trim() === sName);
 
         if (matchesSalesName) {
+          const isReturn = entry.tipe === 'Masuk';
           logs.push({
             id: entry.id,
             tanggal: new Date(entry.tanggal),
-            tipe: 'Masuk', // It's "Masuk" from perspective of the Sales stock
-            sumberTujuan: entry.hanyaSales ? 'Penyesuaian (Murni Sales)' : 'Gudang Makayasa Utama',
+            tipe: isReturn ? 'Keluar' : 'Masuk', // Return reduces sales stock, so it's an outflow (Keluar) log
+            sumberTujuan: isReturn
+              ? (entry.hanyaSales ? 'Koreksi Stok (Murni Sales)' : 'Kembali ke Gudang Utama')
+              : (entry.hanyaSales ? 'Penyesuaian (Murni Sales)' : 'Gudang Makayasa Utama'),
             jumlah: entry.jumlah,
-            keterangan: entry.keterangan || (entry.hanyaSales ? 'Input manual penyesuaian stok sales' : 'Distribusi stok dari gudang utama'),
+            keterangan: entry.keterangan || (isReturn
+              ? (entry.hanyaSales ? 'Koreksi pengurangan stok murni sales' : 'Pengembalian sisa/koreksi stok sales ke gudang')
+              : (entry.hanyaSales ? 'Input manual penyesuaian stok sales' : 'Distribusi stok dari gudang utama')),
             reference: entry.id,
             canDelete: entry.sumberInput === 'Aplikasi',
             hanyaSales: entry.hanyaSales
@@ -306,6 +329,7 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
 
   // --- DELETE / REVERT ALLOCATION ---
   const handleDeleteAllocation = (entryId: string) => {
+    if (loggedInSalesName) return; // STRICT GUARD: No deletes allowed from sales account!
     setModalState({
       isOpen: true,
       title: 'Batalkan & Hapus Alokasi?',
@@ -382,6 +406,70 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
     });
   };
 
+  // --- RETURN / PENGEMBALIAN STOCK FORM SUBMISSION ---
+  const handleReturnStock = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loggedInSalesName) return; // STRICT GUARD: No return creation allowed from sales account!
+    const qty = parseInt(returnQty, 10);
+    if (isNaN(qty) || qty <= 0) {
+      setModalState({
+        isOpen: true,
+        title: 'Jumlah Tidak Valid',
+        message: 'Silakan isi jumlah volume pack dengan angka positif!',
+        type: 'alert',
+        onConfirm: () => setModalState(prev => ({ ...prev, isOpen: false }))
+      });
+      return;
+    }
+
+    if (!returnSales) {
+      setModalState({
+        isOpen: true,
+        title: 'Sales Belum Dipilih',
+        message: 'Silakan pilih sales yang mengembalikan/menyesuaikan stok!',
+        type: 'alert',
+        onConfirm: () => setModalState(prev => ({ ...prev, isOpen: false }))
+      });
+      return;
+    }
+
+    const isHanyaSales = !returnReduceGudang;
+
+    const newWarehouseInEntry: StockEntry = {
+      id: `STK-APP-${Date.now()}`,
+      tanggal: new Date(returnDate),
+      tipe: 'Masuk', // Inflow to warehouse
+      sumberTujuan: isHanyaSales ? `Koreksi ${returnSales}` : `Sales ${returnSales}`,
+      jumlah: qty,
+      keterangan: returnDesc.trim() || (returnType === 'koreksi'
+        ? `Koreksi kelebihan kirim Sales ${returnSales}${isHanyaSales ? ' (tidak masuk gudang)' : ''}`
+        : `Pengembalian sisa stok Sales ${returnSales}${isHanyaSales ? ' (tidak masuk gudang)' : ''}`),
+      sumberInput: 'Aplikasi',
+      hanyaSales: isHanyaSales,
+      salesName: returnSales
+    };
+
+    const updated = [newWarehouseInEntry, ...stockEntries];
+    saveEntries(updated);
+
+    // Reset Form
+    setReturnQty('');
+    setReturnDesc('');
+    setIsReturnOpen(false);
+    setIsFormSubmitted(true);
+    setTimeout(() => setIsFormSubmitted(false), 3000);
+
+    setModalState({
+      isOpen: true,
+      title: returnType === 'koreksi' ? 'Koreksi Berhasil!' : 'Pengembalian Berhasil!',
+      message: isHanyaSales
+        ? `Koreksi pengurangan stok sebanyak ${qty} Pack berhasil dicatat untuk Sales ${returnSales} secara mandiri tanpa menambah sisa stok Gudang Utama.`
+        : `Stok sebanyak ${qty} Pack berhasil dikembalikan oleh Sales ${returnSales} ke Gudang Utama. Sisa stok gudang utama bertambah, dan sisa stok sales berkurang secara otomatis.`,
+      type: 'alert',
+      onConfirm: () => setModalState(prev => ({ ...prev, isOpen: false }))
+    });
+  };
+
   // Helper format currency IDR
   const formatIDR = (num: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -438,12 +526,27 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
           </div>
 
           {!loggedInSalesName && (
-            <button
-              onClick={() => setIsAllocationOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-600/10 transition-all hover:scale-[1.02]"
-            >
-              <Plus className="w-4 h-4" /> Bagi Stok Sales
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => {
+                  if (salesNames.length > 0) setReturnSales(salesNames[0]);
+                  setIsReturnOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md shadow-amber-600/10 transition-all hover:scale-[1.02]"
+              >
+                <ArrowDownRight className="w-4 h-4" /> Tarik / Terima Pengembalian
+              </button>
+              
+              <button
+                onClick={() => {
+                  if (salesNames.length > 0) setAllocSales(salesNames[0]);
+                  setIsAllocationOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-600/10 transition-all hover:scale-[1.02]"
+              >
+                <Plus className="w-4 h-4" /> Bagi Stok Sales
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -998,6 +1101,164 @@ export default function StokSales({ transactions, salesNames, loggedInSalesName 
                     className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-colors shadow-sm"
                   >
                     Kirim Stok
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Quick Return Dialog Modal */}
+      <AnimatePresence>
+        {isReturnOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 max-w-md w-full border border-slate-100 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-amber-50 text-amber-600">
+                    <ArrowDownRight className="w-5 h-5" />
+                  </span>
+                  <h4 className="text-base font-black text-slate-950 tracking-tight">
+                    Tarik / Terima Pengembalian Stok Sales
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsReturnOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 text-sm font-bold"
+                >
+                  [X]
+                </button>
+              </div>
+
+              <form onSubmit={handleReturnStock} className="space-y-4 text-left">
+                {/* Return type selector */}
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-700">Tipe Pengembalian / Koreksi:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReturnType('sisa');
+                        setReturnDesc('Pengembalian sisa stok sales akhir periode');
+                      }}
+                      className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all ${
+                        returnType === 'sisa'
+                          ? 'bg-amber-50 border-amber-200 text-amber-700 font-extrabold'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      Pengembalian Sisa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReturnType('koreksi');
+                        setReturnDesc('Koreksi kelebihan kirim (salah input/salah kirim)');
+                      }}
+                      className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all ${
+                        returnType === 'koreksi'
+                          ? 'bg-amber-50 border-amber-200 text-amber-700 font-extrabold'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      Koreksi Kelebihan
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sales list drop down */}
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-700">Pilih Sales:</label>
+                  <select
+                    value={returnSales}
+                    onChange={(e) => setReturnSales(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  >
+                    {salesNames.map(name => (
+                      <option key={name} value={name}>Sales {name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Return qty */}
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-700">Jumlah Kembalian (Pack):</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    placeholder="Contoh: 50"
+                    value={returnQty}
+                    onChange={(e) => setReturnQty(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+
+                {/* Return date */}
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-700">Tanggal Transaksi:</label>
+                  <input
+                    type="date"
+                    required
+                    value={returnDate}
+                    onChange={(e) => setReturnDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+
+                {/* Add to warehouse stock toggle */}
+                <div className="flex items-start gap-2.5 bg-slate-50 border border-slate-200/80 rounded-xl p-3 select-none">
+                  <input
+                    type="checkbox"
+                    id="returnReduceGudang"
+                    checked={returnReduceGudang}
+                    onChange={(e) => setReturnReduceGudang(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-slate-300 accent-amber-600 cursor-pointer shrink-0"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="returnReduceGudang" className="text-xs font-black text-slate-700 cursor-pointer block leading-tight">
+                      Kembalikan ke Stok Gudang Utama
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-semibold block leading-tight mt-0.5">
+                      {returnReduceGudang 
+                        ? "Menambah sisa stok di Gudang Utama secara otomatis karena barang fisik dikembalikan." 
+                        : "Hanya mengurangi sisa stok sales (misal: penyesuaian/koreksi kesalahan tanpa mengembalikan barang ke gudang)."}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Optional description */}
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-700">Keterangan / Catatan:</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Tulis alasan pengembalian..."
+                    value={returnDesc}
+                    onChange={(e) => setReturnDesc(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
+                  />
+                </div>
+
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsReturnOpen(false)}
+                    className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs transition-colors shadow-sm"
+                  >
+                    Terima Pengembalian
                   </button>
                 </div>
               </form>

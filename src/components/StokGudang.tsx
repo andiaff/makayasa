@@ -42,6 +42,7 @@ import {
 } from 'recharts';
 import { Transaction, StockEntry } from '../types';
 import { formatIDR } from '../utils/spreadsheetParser';
+import { getApiUrl } from '../utils/apiUrl';
 
 interface StokGudangProps {
   transactions: Transaction[];
@@ -383,7 +384,7 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
       }
 
       const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${stockSheetGid}`;
-      const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(csvUrl)}`;
+      const proxyUrl = getApiUrl(`/api/proxy-appscript?url=${encodeURIComponent(csvUrl)}`);
 
       const res = await fetch(proxyUrl);
       if (!res.ok) {
