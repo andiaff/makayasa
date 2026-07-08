@@ -52,6 +52,11 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
   const [settleAmount, setSettleAmount] = useState<string>('');
   const [settleKeterangan, setSettleKeterangan] = useState<string>('');
 
+  // Confirmation states for custom modals to avoid iframe window.confirm blocks
+  const [deleteTarget, setDeleteTarget] = useState<SalesDeposit | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
+  const [showArchiveAllConfirm, setShowArchiveAllConfirm] = useState<boolean>(false);
+
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<'All' | 'Lunas' | 'Kurang' | 'Lebih'>('All');
@@ -126,15 +131,15 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
   }, []);
 
   const handleResetBukuBesar = () => {
-    if (window.confirm('Apakah Anda yakin ingin mengosongkan seluruh catatan Buku Besar Setoran Sales? Semua riwayat setoran di sistem akan dihapus permanen.')) {
-      saveDeposits([]);
-      triggerNotification('Buku besar setoran sales berhasil direset & dikosongkan!', 'success');
-    }
+    saveDeposits([]);
+    triggerNotification('Buku besar setoran sales berhasil direset & dikosongkan!', 'success');
+    setShowResetConfirm(false);
   };
 
   const saveDeposits = (newDeposits: SalesDeposit[]) => {
     setDeposits(newDeposits);
     localStorage.setItem('makayasa_sales_deposits', JSON.stringify(newDeposits));
+    window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: 'makayasa_sales_deposits' } }));
   };
 
   const triggerNotification = (message: string, type: 'success' | 'error' = 'success') => {
@@ -833,11 +838,10 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
 
   // --- DELETE DEPOSIT HANDLER ---
   const handleDeleteDeposit = (id: string) => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus record setoran ini secara permanen?')) {
-      const updated = deposits.filter(dep => dep.id !== id);
-      saveDeposits(updated);
-      triggerNotification('Record setoran berhasil dihapus!', 'success');
-    }
+    const updated = deposits.filter(dep => dep.id !== id);
+    saveDeposits(updated);
+    triggerNotification('Record setoran berhasil dihapus!', 'success');
+    setDeleteTarget(null);
   };
 
   // --- ARCHIVING HANDLERS ---
@@ -1296,7 +1300,7 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
               {!loggedInSalesName && (
                 <button
                   type="button"
-                  onClick={handleResetBukuBesar}
+                  onClick={() => setShowResetConfirm(true)}
                   className="text-[9px] font-black text-rose-600 hover:text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-200/50 px-2 py-0.5 rounded transition-all uppercase flex items-center gap-0.5"
                   title="Reset dan Kosongkan Catatan Buku Besar Setoran"
                 >
@@ -1511,7 +1515,7 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
                           {/* Delete button */}
                           {!loggedInSalesName && (
                             <button
-                              onClick={() => handleDeleteDeposit(dep.id)}
+                              onClick={() => setDeleteTarget(dep)}
                               className="bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 px-1.5 py-1 rounded border border-slate-200 hover:border-rose-200 transition-all"
                               title="Hapus Permanen"
                             >
@@ -1968,9 +1972,7 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
                   {/* Option 2: Archive All */}
                   <button
                     onClick={() => {
-                      if (window.confirm("Apakah Anda yakin ingin mengarsipkan seluruh setoran termasuk yang KURANG SETOR?")) {
-                        handleArchiveDeposits('all');
-                      }
+                      setShowArchiveAllConfirm(true);
                     }}
                     className="w-full text-left p-3.5 bg-rose-50/30 hover:bg-rose-50/60 border border-rose-100 rounded-xl transition-all flex items-start gap-3 group"
                   >
@@ -2126,6 +2128,211 @@ export default function SetoranSales({ transactions, salesNames, loggedInSalesNa
                 </div>
 
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: CUSTOM DELETE CONFIRMATION */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="bg-rose-600 text-white p-4 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Trash2 className="w-5 h-5 text-white" />
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider">Hapus Record Setoran</h4>
+                    <p className="text-[10px] text-rose-200">Tindakan ini tidak dapat dibatalkan</p>
+                  </div>
+                </div>
+                <button onClick={() => setDeleteTarget(null)} className="text-rose-200 hover:text-white transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="bg-rose-50 text-rose-800 p-4 rounded-xl border border-rose-200 text-xs leading-relaxed space-y-2">
+                  <p className="font-extrabold flex items-center gap-1 text-rose-900">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    KONFIRMASI PENGHAPUSAN PERMANEN
+                  </p>
+                  <p className="font-semibold text-[11px]">
+                    Apakah Anda yakin ingin menghapus record setoran sales ini secara permanen dari Buku Besar?
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-xs space-y-2 text-slate-700">
+                  <div className="flex justify-between">
+                    <span className="font-medium text-slate-400">Nama Sales:</span>
+                    <span className="font-bold text-slate-900">{deleteTarget.salesName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-slate-400">Tanggal Setor:</span>
+                    <span className="font-bold text-slate-900">{formatDateIndo(deleteTarget.tanggalSetor)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-slate-400">Jumlah Setoran:</span>
+                    <span className="font-extrabold text-emerald-600">{formatIDR(deleteTarget.jumlahDisetor)}</span>
+                  </div>
+                  {deleteTarget.statusSetoran !== 'Lunas' && (
+                    <div className="flex justify-between">
+                      <span className="font-medium text-slate-400">Selisih ({deleteTarget.statusSetoran}):</span>
+                      <span className="font-extrabold text-rose-600">{formatIDR(deleteTarget.selisihSetoran)}</span>
+                    </div>
+                  )}
+                  {deleteTarget.keterangan && (
+                    <div className="pt-2 border-t border-slate-200/50">
+                      <span className="font-medium text-slate-400 block mb-1">Keterangan:</span>
+                      <p className="font-medium text-slate-800 italic">"{deleteTarget.keterangan}"</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(null)}
+                    className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5 transition-all text-center"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteDeposit(deleteTarget.id)}
+                    className="flex-1 text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-500 rounded-xl py-2.5 transition-all text-center shadow-lg shadow-rose-600/10"
+                  >
+                    Ya, Hapus Permanen
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: CUSTOM RESET LEDGER CONFIRMATION */}
+      <AnimatePresence>
+        {showResetConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="bg-rose-600 text-white p-4 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Trash2 className="w-5 h-5 text-white" />
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider">Reset Buku Besar Setoran</h4>
+                    <p className="text-[10px] text-rose-200">Menghapus seluruh catatan setoran aktif</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowResetConfirm(false)} className="text-rose-200 hover:text-white transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="bg-rose-50 text-rose-800 p-4 rounded-xl border border-rose-200 text-xs leading-relaxed space-y-3">
+                  <p className="font-extrabold flex items-center gap-1 text-rose-900">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    PERINGATAN KRITIKAL!
+                  </p>
+                  <p className="font-semibold text-[11px]">
+                    Apakah Anda yakin ingin mengosongkan seluruh catatan Buku Besar Setoran Sales?
+                  </p>
+                  <p className="font-semibold text-[11px] text-rose-700">
+                    Tindakan ini akan menghapus <strong className="font-black text-rose-900">SEMUA</strong> riwayat setoran di sistem secara permanen. Tindakan ini tidak dapat dibatalkan.
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetConfirm(false)}
+                    className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5 transition-all text-center"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetBukuBesar}
+                    className="flex-1 text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-500 rounded-xl py-2.5 transition-all text-center shadow-lg shadow-rose-600/10"
+                  >
+                    Ya, Reset Sekarang
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: CUSTOM ARCHIVE ALL CONFIRMATION */}
+      <AnimatePresence>
+        {showArchiveAllConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="bg-amber-600 text-white p-4 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Archive className="w-5 h-5 text-white" />
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider">Arsip Seluruh Catatan</h4>
+                    <p className="text-[10px] text-amber-200">Termasuk catatan yang belum lunas</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowArchiveAllConfirm(false)} className="text-amber-200 hover:text-white transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="bg-amber-50 text-amber-800 p-4 rounded-xl border border-amber-200 text-xs leading-relaxed space-y-3">
+                  <p className="font-extrabold flex items-center gap-1 text-amber-900">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    KONFIRMASI PENGARSIPAN TOTAL
+                  </p>
+                  <p className="font-semibold text-[11px]">
+                    Apakah Anda yakin ingin mengarsipkan seluruh setoran termasuk yang berstatus <strong className="font-black text-amber-950">KURANG SETOR</strong>?
+                  </p>
+                  <p className="font-semibold text-[11px] text-amber-700">
+                    Catatan yang kurang setor akan dipindahkan ke tab riwayat historis dan tidak akan muncul di panel tagihan aktif lagi.
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowArchiveAllConfirm(false)}
+                    className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5 transition-all text-center"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleArchiveDeposits('all');
+                      setShowArchiveAllConfirm(false);
+                      setShowArchiveConfirmModal(false);
+                    }}
+                    className="flex-1 text-xs font-extrabold text-white bg-amber-600 hover:bg-amber-500 rounded-xl py-2.5 transition-all text-center shadow-lg shadow-amber-600/10"
+                  >
+                    Ya, Arsipkan Semua
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
