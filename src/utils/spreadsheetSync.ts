@@ -348,20 +348,38 @@ export async function syncKeuanganTab(appScriptUrl: string): Promise<{ success: 
     const deposits = JSON.parse(depositsRaw);
     const freelance = JSON.parse(freelanceRaw);
     
+    // Create an intermediate list of transaction items with parsed Date objects
+    interface IntermediateItem {
+      id: string;
+      dateObj: Date;
+      tipe: 'Pemasukan' | 'Pengeluaran';
+      nominal: number;
+      keterangan: string;
+    }
+    
+    const intermediate: IntermediateItem[] = [];
+    
+    const parseDateHelper = (val: any): Date => {
+      if (!val) return new Date();
+      const parsed = new Date(val);
+      return isNaN(parsed.getTime()) ? new Date() : parsed;
+    };
+    
     // 1. Manual Expenses (Pengeluaran)
-    const mappedExpenses = expenses.map((item: any) => ({
-      id: item.id,
-      tanggal: item.tanggal,
-      tipe: 'Pengeluaran',
-      kategori: item.kategori,
-      nominal: item.nominal,
-      keterangan: item.keterangan || `Pengeluaran ${item.kategori}`
-    }));
+    expenses.forEach((item: any) => {
+      intermediate.push({
+        id: item.id,
+        dateObj: parseDateHelper(item.tanggal),
+        tipe: 'Pengeluaran',
+        nominal: item.nominal || 0,
+        keterangan: item.keterangan || `Pengeluaran ${item.kategori || 'Operasional'}`
+      });
+    });
     
     // 2. Sales Deposits (Pemasukan)
-    const mappedDeposits = deposits
+    deposits
       .filter((dep: any) => dep.jumlahDisetor > 0 && !dep.archived)
-      .map((dep: any) => {
+      .forEach((dep: any) => {
         const startDate = dep.tanggalMulaiPeriode ? new Date(dep.tanggalMulaiPeriode) : null;
         const endDate = dep.tanggalSelesaiPeriode ? new Date(dep.tanggalSelesaiPeriode) : null;
         
@@ -369,34 +387,55 @@ export async function syncKeuanganTab(appScriptUrl: string): Promise<{ success: 
         const startStr = startDate && !isNaN(startDate.getTime()) ? startDate.toLocaleDateString('id-ID', formatOptions) : '';
         const endStr = endDate && !isNaN(endDate.getTime()) ? endDate.toLocaleDateString('id-ID', formatOptions) : '';
         
-        return {
+        intermediate.push({
           id: `INC-SALES-${dep.id}`,
-          tanggal: dep.tanggalSetor,
+          dateObj: parseDateHelper(dep.tanggalSetor),
           tipe: 'Pemasukan',
-          kategori: 'Setoran Salesman',
-          nominal: dep.jumlahDisetor,
+          nominal: dep.jumlahDisetor || 0,
           keterangan: `Setoran kas salesman: ${dep.salesName} (Periode ${startStr} - ${endStr})`
-        };
+        });
       });
       
     // 3. Freelance Payments (Pemasukan)
-    const mappedFreelance = freelance
+    freelance
       .filter((rec: any) => rec.jumlahDibayar > 0 && !rec.archived)
-      .map((rec: any) => {
+      .forEach((rec: any) => {
         const incomeDate = rec.tanggalLunas ? rec.tanggalLunas : rec.tanggalAmbil;
-        return {
+        intermediate.push({
           id: `INC-FREE-${rec.id}`,
-          tanggal: incomeDate,
+          dateObj: parseDateHelper(incomeDate),
           tipe: 'Pemasukan',
-          kategori: 'Setoran Freelance',
-          nominal: rec.jumlahDibayar,
+          nominal: rec.jumlahDibayar || 0,
           keterangan: `Setoran mitra freelance: ${rec.namaFreelance} (${rec.qtyPacks} Pack) ${rec.keterangan ? `- ${rec.keterangan}` : ''}`
-        };
+        });
       });
       
-    const consolidated = [...mappedExpenses, ...mappedDeposits, ...mappedFreelance];
+    // Sort oldest first chronologically for natural running balance flow
+    const sorted = intermediate.sort((a, b) => {
+      const dateCompare = a.dateObj.getTime() - b.dateObj.getTime();
+      if (dateCompare !== 0) return dateCompare;
+      return a.id.localeCompare(b.id);
+    });
     
-    return await syncSingleTabDirect(appScriptUrl, 'Keuangan', consolidated);
+    // Calculate running balance and map to final exact 6 columns requested
+    let runningSaldo = 0;
+    const finalConsolidated = sorted.map((item, index) => {
+      const isIncome = item.tipe === 'Pemasukan';
+      const pemasukan = isIncome ? item.nominal : 0;
+      const pengeluaran = isIncome ? 0 : item.nominal;
+      runningSaldo += (pemasukan - pengeluaran);
+      
+      return {
+        nomor: index + 1,
+        tanggal: item.dateObj.toISOString(), // ISO string for Apps Script date parsing
+        keterangan: item.keterangan,
+        pemasukan: pemasukan,
+        pengeluaran: pengeluaran,
+        saldo: runningSaldo
+      };
+    });
+    
+    return await syncSingleTabDirect(appScriptUrl, 'Keuangan', finalConsolidated);
   } catch (e: any) {
     console.warn('[SpreadsheetSync Keuangan] Error gathering consolidated data', e);
     return { success: false, message: `Gagal konsolidasi keuangan: ${e.message}` };

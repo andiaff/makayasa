@@ -235,7 +235,7 @@ export default function PembukuanKeuangan() {
 • Tipe: ${entry.tipe}
 • Sumber: ${entry.sumber}
 • Kategori: ${entry.kategori}
-• Detail: ${entry.deskripsi}
+• Detail: ${String(entry.deskripsi || '')}
 • Nominal: ${formatIDR(entry.nominal)}`;
 
     if (window.confirm(confirmMsg)) {
@@ -306,7 +306,7 @@ export default function PembukuanKeuangan() {
         tipe: 'Pengeluaran',
         sumber: 'Manual Pengeluaran',
         kategori: exp.kategori,
-        deskripsi: exp.keterangan,
+        deskripsi: String(exp.keterangan || ''),
         nominal: exp.nominal,
         referensiId: exp.id
       });
@@ -369,7 +369,7 @@ export default function PembukuanKeuangan() {
       // 3. Filter by Search Term
       if (searchTerm.trim() !== '') {
         const term = searchTerm.toLowerCase();
-        const matchesDesc = entry.deskripsi.toLowerCase().includes(term);
+        const matchesDesc = String(entry.deskripsi || '').toLowerCase().includes(term);
         const matchesCategory = entry.kategori.toLowerCase().includes(term);
         const matchesId = entry.id.toLowerCase().includes(term);
         const matchesSumber = entry.sumber.toLowerCase().includes(term);
@@ -403,8 +403,8 @@ export default function PembukuanKeuangan() {
       csvContent += `Total Pengeluaran: ${formatIDR(stats.totalPengeluaran)}\n`;
       csvContent += `Saldo Kas Bersih: ${formatIDR(stats.saldoBersih)}\n\n`;
       
-      // Column Headers requested: nomor, tanggal, keterangan/deskripsi, pemasukan, pengeluaran, saldo
-      csvContent += 'Nomor,Tanggal,Keterangan/Deskripsi,Pemasukan,Pengeluaran,Saldo\n';
+      // Column Headers requested: nomor, tanggal, keterangan, pemasukan, pengeluaran, saldo
+      csvContent += 'Nomor,Tanggal,Keterangan,Pemasukan,Pengeluaran,Saldo\n';
       
       let runningSaldo = 0;
       // Sort oldest first for natural running balance calculation
@@ -421,7 +421,7 @@ export default function PembukuanKeuangan() {
         runningSaldo += (nominalPemasukan - nominalPengeluaran);
 
         // Escape quotes to prevent CSV breakage
-        const cleanDesc = entry.deskripsi.replace(/"/g, '""');
+        const cleanDesc = String(entry.deskripsi || '').replace(/"/g, '""');
         const formattedDate = entry.tanggal.toLocaleDateString('id-ID', {
           day: '2-digit',
           month: '2-digit',
@@ -796,8 +796,8 @@ export default function PembukuanKeuangan() {
                       </td>
 
                       {/* DESCRIPTION */}
-                      <td className="py-3.5 px-5 font-semibold text-slate-600 max-w-sm truncate leading-relaxed" title={entry.deskripsi}>
-                        {entry.deskripsi}
+                      <td className="py-3.5 px-5 font-semibold text-slate-600 max-w-sm truncate leading-relaxed" title={String(entry.deskripsi || '')}>
+                        {String(entry.deskripsi || '')}
                       </td>
 
                       {/* NOMINAL AMOUNT */}

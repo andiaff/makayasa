@@ -71,7 +71,7 @@ function doGet(e) {
     getOrCreateSheet(ss, "Stok Gudang", ["ID", "Tanggal", "Tipe", "Sumber/Tujuan", "Jumlah (Pack)", "Keterangan", "Sumber Input", "Hanya Sales", "Nama Sales", "Is Reversed", "Reversed At"]);
     getOrCreateSheet(ss, "Stok Sales", ["ID", "Tanggal", "Nama Sales", "Tipe", "Jumlah (Pack)", "Keterangan", "Sumber Input"]);
     getOrCreateSheet(ss, "Manajemen Freelance", ["ID", "Tanggal Ambil", "Nama Freelance", "Qty Packs", "Harga Per Pack", "Total Omset", "Status Pembayaran", "Jumlah Dibayar", "Kurang Bayar", "Keterangan"]);
-    getOrCreateSheet(ss, "Keuangan", ["ID", "Tanggal", "Tipe", "Kategori", "Nominal", "Keterangan"]);
+    getOrCreateSheet(ss, "Keuangan", ["Nomor", "Tanggal", "Keterangan", "Pemasukan", "Pengeluaran", "Saldo"]);
     
     if (action === "read_all") {
       const result = {};
@@ -142,6 +142,11 @@ function doPost(e) {
     if (action === "sync_tab" && tabName && Array.isArray(data)) {
       const headers = getTabHeaders(tabName);
       const sheet = getOrCreateSheet(ss, tabName, headers);
+      
+      // Force rewrite header row to ensure it matches the current format and fixes layout misalignment
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f1f5f9");
+      sheet.setFrozenRows(1);
       
       // Clear existing values (keep header row 1)
       if (sheet.getLastRow() > 1) {
@@ -234,7 +239,7 @@ function getTabHeaders(tabName) {
   } else if (tabName === "Manajemen Freelance") {
     return ["ID", "Tanggal Ambil", "Nama Freelance", "Qty Packs", "Harga Per Pack", "Total Omset", "Status Pembayaran", "Jumlah Dibayar", "Kurang Bayar", "Keterangan"];
   } else if (tabName === "Keuangan") {
-    return ["ID", "Tanggal", "Tipe", "Kategori", "Nominal", "Keterangan"];
+    return ["Nomor", "Tanggal", "Keterangan", "Pemasukan", "Pengeluaran", "Saldo"];
   }
   return [];
 }
@@ -283,7 +288,11 @@ function mapHeaderToKey(header, tabName) {
     "Kurang Bayar": "kurangBayar",
     
     "Kategori": "kategori",
-    "Nominal": "nominal"
+    "Nominal": "nominal",
+    "Nomor": "nomor",
+    "Pemasukan": "pemasukan",
+    "Pengeluaran": "pengeluaran",
+    "Saldo": "saldo"
   };
   return mapping[header] || header.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
