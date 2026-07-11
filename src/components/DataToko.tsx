@@ -287,14 +287,24 @@ export default function DataToko({ transactions }: DataTokoProps) {
       const name = tx.storeName;
       if (!name || name === 'Toko Umum') return;
 
-      // Classify if it's a new store
-      const isNew = tx.statusKunjungan === 'Baru Order' || 
-                    (tx.transaksiKe && (
-                      tx.transaksiKe.toString().trim() === '1' || 
-                      tx.transaksiKe.toString().toLowerCase().includes('1 kali') || 
-                      tx.transaksiKe.toString().toLowerCase().includes('baru') ||
-                      tx.transaksiKe.toString().toLowerCase().includes('ke-1')
-                    ));
+      // Classify if it's a new store based on exact user criteria:
+      // 1. Must be their first order (statusKunjungan === 'Baru Order' and qtyPacks > 0)
+      // 2. Must be the first order (transaksiKe is 1, 1 kali, etc.)
+      // 3. Total visits across entire transaction history must be <= 2
+      const storeNameNormalized = name.trim().toLowerCase();
+      const totalVisitsCount = transactions.filter(t => t.storeName.trim().toLowerCase() === storeNameNormalized).length;
+
+      const isNew = 
+        tx.statusKunjungan === 'Baru Order' && 
+        (tx.qtyPacks || 0) > 0 && 
+        (!tx.transaksiKe || 
+          tx.transaksiKe.toString().trim() === '1' || 
+          tx.transaksiKe.toString().toLowerCase().includes('1 kali') || 
+          tx.transaksiKe.toString().toLowerCase().includes('baru') ||
+          tx.transaksiKe.toString().toLowerCase().includes('ke-1') ||
+          tx.transaksiKe.toString().toLowerCase().includes('pertama')
+        ) && 
+        totalVisitsCount <= 2;
 
       // Region (Kecamatan)
       let region = 'Lainnya';
@@ -381,7 +391,7 @@ export default function DataToko({ transactions }: DataTokoProps) {
       konsumen: calculateGroupMetrics(consumersList),
       allVisits: list
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, transactions]);
 
   // Filter all store metrics by search query & type filter
   const filteredStores = storeMetrics.filter(store => {

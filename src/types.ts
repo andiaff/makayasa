@@ -16,6 +16,7 @@ export interface Transaction {
   desa?: string;
   transaksiKe?: string;
   statusToko?: 'Toko / Outlet' | 'Konsumen / End User';
+  rawStatusToko?: string;
 }
 
 export interface SalesPerformance {

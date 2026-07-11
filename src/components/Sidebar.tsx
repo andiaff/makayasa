@@ -23,7 +23,8 @@ import {
   Wallet,
   X,
   Menu,
-  Map
+  Map,
+  FileSpreadsheet
 } from 'lucide-react';
 
 import { AppConfig } from '../types';
@@ -84,6 +85,12 @@ export default function Sidebar({
     { id: 16, name: 'Wilayah / Area', desc: 'Pemetaan 31 kecamatan Jember', icon: Map },
     { id: 5, name: 'Leaderboard Sales', desc: 'Rangking & pencapaian target', icon: Trophy },
     { id: 6, name: 'Target & Komisi', desc: 'Kalkulator bonus & insentif', icon: Calculator },
+    { 
+      id: 17, 
+      name: loggedInSalesName ? 'Laporan Saya' : 'Laporan Per Sales', 
+      desc: loggedInSalesName ? 'Unduh laporan performa Anda (Excel)' : 'Unduh laporan performa harian sales', 
+      icon: FileSpreadsheet 
+    },
     { id: 10, name: 'Operasional Sales', desc: 'Evaluasi uang operasional sales', icon: Coins },
     { 
       id: 14, 
@@ -105,9 +112,9 @@ export default function Sidebar({
     { id: 9, name: 'Sistem Pengaturan', desc: 'Konfigurasi harga & sumber data', icon: Settings },
   ];
 
-  // Filter menu items for Sales accounts (only show 1, 2, 3, 4, 16, 14, 12)
+  // Filter menu items for Sales accounts (only show 1, 2, 3, 4, 16, 14, 12, 17)
   const menuItems = loggedInSalesName
-    ? allMenuItems.filter(item => [1, 2, 3, 4, 16, 14, 12].includes(item.id))
+    ? allMenuItems.filter(item => [1, 2, 3, 4, 16, 14, 12, 17].includes(item.id))
     : allMenuItems;
 
   const handleMenuClick = (id: number) => {

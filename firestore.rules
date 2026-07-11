@@ -2,11 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Global Safety Net
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // Common Validation Helpers
     function incoming() {
       return request.resource.data;
@@ -33,8 +28,8 @@ service cloud.firestore {
         && data.jumlahDisetor is number
         && data.selisihSetoran is number
         && (data.statusSetoran == 'Lunas' || data.statusSetoran == 'Kurang Setor' || data.statusSetoran == 'Lebih Setor')
-        && (!data.keys().hasAll(['keterangan']) || isStringWithSize(data.keterangan, 10000))
-        && (!data.keys().hasAll(['archived']) || data.archived is bool);
+        && (!data.keys().hasAll(['keterangan']) || data.keterangan == null || isStringWithSize(data.keterangan, 10000))
+        && (!data.keys().hasAll(['archived']) || data.archived == null || data.archived is bool);
     }
 
     match /sales_deposits/{depositId} {
@@ -71,11 +66,11 @@ service cloud.firestore {
         && (data.statusPembayaran == 'Belum Bayar' || data.statusPembayaran == 'Cicil' || data.statusPembayaran == 'Lunas')
         && data.jumlahDibayar is number
         && data.kurangBayar is number
-        && (!data.keys().hasAll(['potongStokGudang']) || data.potongStokGudang is bool)
-        && (!data.keys().hasAll(['keterangan']) || isStringWithSize(data.keterangan, 10000))
-        && (!data.keys().hasAll(['returPacks']) || data.returPacks is number)
-        && (!data.keys().hasAll(['tanggalLunas']) || isStringWithSize(data.tanggalLunas, 128))
-        && (!data.keys().hasAll(['archived']) || data.archived is bool);
+        && (!data.keys().hasAll(['potongStokGudang']) || data.potongStokGudang == null || data.potongStokGudang is bool)
+        && (!data.keys().hasAll(['keterangan']) || data.keterangan == null || isStringWithSize(data.keterangan, 10000))
+        && (!data.keys().hasAll(['returPacks']) || data.returPacks == null || data.returPacks is number)
+        && (!data.keys().hasAll(['tanggalLunas']) || data.tanggalLunas == null || isStringWithSize(data.tanggalLunas, 128))
+        && (!data.keys().hasAll(['archived']) || data.archived == null || data.archived is bool);
     }
 
     match /freelance_records/{recordId} {
@@ -92,12 +87,12 @@ service cloud.firestore {
         && (data.tipe == 'Masuk' || data.tipe == 'Keluar')
         && isStringWithSize(data.sumberTujuan, 128)
         && isNumberWithLimit(data.jumlah, 1000000)
-        && (!data.keys().hasAll(['keterangan']) || isStringWithSize(data.keterangan, 5000))
-        && (!data.keys().hasAll(['sumberInput']) || (data.sumberInput == 'Aplikasi' || data.sumberInput == 'Spreadsheet'))
-        && (!data.keys().hasAll(['hanyaSales']) || data.hanyaSales is bool)
-        && (!data.keys().hasAll(['salesName']) || isStringWithSize(data.salesName, 128))
-        && (!data.keys().hasAll(['isReversed']) || data.isReversed is bool)
-        && (!data.keys().hasAll(['reversedAt']) || isStringWithSize(data.reversedAt, 128));
+        && (!data.keys().hasAll(['keterangan']) || data.keterangan == null || isStringWithSize(data.keterangan, 5000))
+        && (!data.keys().hasAll(['sumberInput']) || data.sumberInput == null || (data.sumberInput == 'Aplikasi' || data.sumberInput == 'Spreadsheet'))
+        && (!data.keys().hasAll(['hanyaSales']) || data.hanyaSales == null || data.hanyaSales is bool)
+        && (!data.keys().hasAll(['salesName']) || data.salesName == null || isStringWithSize(data.salesName, 128))
+        && (!data.keys().hasAll(['isReversed']) || data.isReversed == null || data.isReversed is bool)
+        && (!data.keys().hasAll(['reversedAt']) || data.reversedAt == null || isStringWithSize(data.reversedAt, 128));
     }
 
     match /stok_gudang/{stokId} {
@@ -108,8 +103,8 @@ service cloud.firestore {
 
     // 5. Owner Config Validation
     function isValidOwnerConfig(data) {
-      return (!data.keys().hasAll(['pricePerPack']) || (data.pricePerPack is number || data.pricePerPack is string))
-        && (!data.keys().hasAll(['mode']) || (data.mode == 'live' || data.mode == 'demo'));
+      return (!data.keys().hasAll(['pricePerPack']) || data.pricePerPack == null || (data.pricePerPack is number || data.pricePerPack is string))
+        && (!data.keys().hasAll(['mode']) || data.mode == null || (data.mode == 'live' || data.mode == 'demo'));
     }
 
     match /owner_config/{configId} {

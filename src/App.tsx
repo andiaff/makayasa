@@ -42,6 +42,7 @@ import FreelanceManagement from './components/FreelanceManagement';
 import SetoranSales from './components/SetoranSales';
 import PembukuanKeuangan from './components/PembukuanKeuangan';
 import WilayahArea from './components/WilayahArea';
+import LaporanPerSales from './components/LaporanPerSales';
 import SkeletonLoader from './components/SkeletonLoader';
 
 // Local storage key constants
@@ -959,6 +960,18 @@ export default function App() {
                 return 'Konsumen / End User';
               }
               return 'Toko / Outlet';
+            })(),
+            rawStatusToko: (() => {
+              const statusTokoKey = Object.keys(row).find(k => {
+                const lowerK = k.toLowerCase();
+                return lowerK.includes('status toko') || 
+                       lowerK.includes('status_toko') || 
+                       lowerK.includes('tipe toko') ||
+                       lowerK.includes('kategori toko') ||
+                       lowerK.includes('tipe_toko') ||
+                       lowerK.includes('klasifikasi');
+              });
+              return statusTokoKey && row[statusTokoKey] ? row[statusTokoKey].toString().trim() : '';
             })()
           };
         });
@@ -1044,6 +1057,8 @@ export default function App() {
           : rawTransactions;
         return <SetoranSales transactions={setoranTransactions} salesNames={finalSalesNames} loggedInSalesName={loggedInSalesName} />;
       }
+      case 17:
+        return <LaporanPerSales transactions={rawTransactions} salesNames={finalSalesNames} loggedInSalesName={loggedInSalesName} />;
       case 15:
         return <PembukuanKeuangan />;
       case 11:
@@ -1098,6 +1113,7 @@ export default function App() {
       9: 'Sistem Pengaturan Command Center',
       10: 'Evaluasi & Pengawasan Operasional Sales',
       14: 'Manajemen & Pengawasan Setoran Sales',
+      17: 'Laporan Performa & Statistik Sales',
       15: 'Pembukuan Kas & Arus Keuangan Perusahaan',
       11: 'Manajemen Stok & Logistik Gudang',
       12: 'Manajemen Stok & Logistik Sales',

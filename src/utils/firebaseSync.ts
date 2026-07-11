@@ -82,7 +82,8 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  // Log the error but do NOT throw to prevent background sync from crashing the main UI thread.
+  // This allows the application to remain functional and fall back gracefully to local storage.
 }
 
 // Flag to prevent infinite loop (server update triggering upload)
@@ -188,6 +189,8 @@ function sanitizeUploadItem(collectionName: string, item: any): any {
     // keterangan: string <= 5000
     if (cleaned.keterangan !== undefined && cleaned.keterangan !== null) {
       cleaned.keterangan = String(cleaned.keterangan).substring(0, 5000);
+    } else {
+      delete cleaned.keterangan;
     }
 
     // sumberInput: 'Aplikasi' | 'Spreadsheet'
@@ -195,26 +198,36 @@ function sanitizeUploadItem(collectionName: string, item: any): any {
       if (cleaned.sumberInput !== 'Aplikasi' && cleaned.sumberInput !== 'Spreadsheet') {
         cleaned.sumberInput = 'Aplikasi';
       }
+    } else {
+      delete cleaned.sumberInput;
     }
 
     // hanyaSales: bool
     if (cleaned.hanyaSales !== undefined && cleaned.hanyaSales !== null) {
       cleaned.hanyaSales = Boolean(cleaned.hanyaSales);
+    } else {
+      delete cleaned.hanyaSales;
     }
 
     // salesName: string <= 128
     if (cleaned.salesName !== undefined && cleaned.salesName !== null) {
       cleaned.salesName = String(cleaned.salesName).substring(0, 128);
+    } else {
+      delete cleaned.salesName;
     }
 
     // isReversed: bool
     if (cleaned.isReversed !== undefined && cleaned.isReversed !== null) {
       cleaned.isReversed = Boolean(cleaned.isReversed);
+    } else {
+      delete cleaned.isReversed;
     }
 
     // reversedAt: string <= 128
     if (cleaned.reversedAt !== undefined && cleaned.reversedAt !== null) {
       cleaned.reversedAt = String(cleaned.reversedAt).substring(0, 128);
+    } else {
+      delete cleaned.reversedAt;
     }
   }
 
@@ -273,10 +286,14 @@ function sanitizeUploadItem(collectionName: string, item: any): any {
 
     if (cleaned.keterangan !== undefined && cleaned.keterangan !== null) {
       cleaned.keterangan = String(cleaned.keterangan).substring(0, 10000);
+    } else {
+      delete cleaned.keterangan;
     }
 
     if (cleaned.archived !== undefined && cleaned.archived !== null) {
       cleaned.archived = Boolean(cleaned.archived);
+    } else {
+      delete cleaned.archived;
     }
   }
 
@@ -315,24 +332,34 @@ function sanitizeUploadItem(collectionName: string, item: any): any {
 
     if (cleaned.potongStokGudang !== undefined && cleaned.potongStokGudang !== null) {
       cleaned.potongStokGudang = Boolean(cleaned.potongStokGudang);
+    } else {
+      delete cleaned.potongStokGudang;
     }
 
     if (cleaned.keterangan !== undefined && cleaned.keterangan !== null) {
       cleaned.keterangan = String(cleaned.keterangan).substring(0, 10000);
+    } else {
+      delete cleaned.keterangan;
     }
 
     if (cleaned.returPacks !== undefined && cleaned.returPacks !== null) {
       if (typeof cleaned.returPacks !== 'number' || isNaN(cleaned.returPacks) || cleaned.returPacks < 0) {
         cleaned.returPacks = parseFloat(cleaned.returPacks as any) || 0;
       }
+    } else {
+      delete cleaned.returPacks;
     }
 
     if (cleaned.tanggalLunas !== undefined && cleaned.tanggalLunas !== null) {
       cleaned.tanggalLunas = String(cleaned.tanggalLunas).substring(0, 128);
+    } else {
+      delete cleaned.tanggalLunas;
     }
 
     if (cleaned.archived !== undefined && cleaned.archived !== null) {
       cleaned.archived = Boolean(cleaned.archived);
+    } else {
+      delete cleaned.archived;
     }
   }
 

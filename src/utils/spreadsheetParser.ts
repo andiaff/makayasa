@@ -231,8 +231,10 @@ export function parseCSVToTransactions(csvText: string, pricePerPack: number): T
 
     const activeStatusTokoIdx = actualStatusTokoIdx !== -1 ? actualStatusTokoIdx : statusTokoIdx;
 
+    let rawStatusToko = '';
     if (activeStatusTokoIdx !== -1 && cells[activeStatusTokoIdx]) {
-      const stVal = cells[activeStatusTokoIdx].trim().toLowerCase();
+      rawStatusToko = cells[activeStatusTokoIdx].trim();
+      const stVal = rawStatusToko.toLowerCase();
       if (stVal.includes('konsumen') || stVal.includes('end user') || stVal.includes('user') || stVal.includes('pribadi') || stVal.includes('ecer')) {
         statusToko = 'Konsumen / End User';
       } else {
@@ -254,6 +256,9 @@ export function parseCSVToTransactions(csvText: string, pricePerPack: number): T
       const stName = storeName.toLowerCase();
       if (foundKonsumenCell || stName.includes('konsumen') || stName.includes('end user') || stName.includes('user') || stName.includes('pribadi')) {
         statusToko = 'Konsumen / End User';
+        rawStatusToko = 'Konsumen';
+      } else {
+        rawStatusToko = 'Toko';
       }
     }
 
@@ -277,6 +282,7 @@ export function parseCSVToTransactions(csvText: string, pricePerPack: number): T
       desa,
       transaksiKe,
       statusToko,
+      rawStatusToko,
     });
   }
 
