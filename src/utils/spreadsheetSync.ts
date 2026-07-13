@@ -361,6 +361,7 @@ export async function syncKeuanganTab(appScriptUrl: string): Promise<{ success: 
       tipe: 'Pemasukan' | 'Pengeluaran';
       nominal: number;
       keterangan: string;
+      kategori: string;
     }
     
     const intermediate: IntermediateItem[] = [];
@@ -378,7 +379,8 @@ export async function syncKeuanganTab(appScriptUrl: string): Promise<{ success: 
         dateObj: parseDateHelper(item.tanggal),
         tipe: 'Pengeluaran',
         nominal: item.nominal || 0,
-        keterangan: item.keterangan || `Pengeluaran ${item.kategori || 'Operasional'}`
+        keterangan: item.keterangan || `Pengeluaran ${item.kategori || 'Operasional'}`,
+        kategori: item.kategori || 'Operasional'
       });
     });
     
@@ -398,7 +400,8 @@ export async function syncKeuanganTab(appScriptUrl: string): Promise<{ success: 
           dateObj: parseDateHelper(dep.tanggalSetor),
           tipe: 'Pemasukan',
           nominal: dep.jumlahDisetor || 0,
-          keterangan: `Setoran kas salesman: ${dep.salesName} (Periode ${startStr} - ${endStr})`
+          keterangan: `Setoran kas salesman: ${dep.salesName} (Periode ${startStr} - ${endStr})`,
+          kategori: 'Setoran Salesman'
         });
       });
       
@@ -412,7 +415,8 @@ export async function syncKeuanganTab(appScriptUrl: string): Promise<{ success: 
           dateObj: parseDateHelper(incomeDate),
           tipe: 'Pemasukan',
           nominal: rec.jumlahDibayar || 0,
-          keterangan: `Setoran mitra freelance: ${rec.namaFreelance} (${rec.qtyPacks} Pack) ${rec.keterangan ? `- ${rec.keterangan}` : ''}`
+          keterangan: `Setoran mitra freelance: ${rec.namaFreelance} (${rec.qtyPacks} Pack) ${rec.keterangan ? `- ${rec.keterangan}` : ''}`,
+          kategori: 'Setoran Freelance'
         });
       });
       
@@ -423,7 +427,7 @@ export async function syncKeuanganTab(appScriptUrl: string): Promise<{ success: 
       return a.id.localeCompare(b.id);
     });
     
-    // Calculate running balance and map to final exact 6 columns requested
+    // Calculate running balance and map to final columns (supporting both raw expense list and consolidated formats)
     let runningSaldo = 0;
     const finalConsolidated = sorted.map((item, index) => {
       const isIncome = item.tipe === 'Pemasukan';
@@ -432,9 +436,15 @@ export async function syncKeuanganTab(appScriptUrl: string): Promise<{ success: 
       runningSaldo += (pemasukan - pengeluaran);
       
       return {
-        nomor: index + 1,
-        tanggal: item.dateObj.toISOString(), // ISO string for Apps Script date parsing
+        // Raw expenses headers support (ID, Tanggal, Kategori, Nominal, Keterangan)
+        id: item.id,
+        tanggal: item.dateObj.toISOString(),
+        kategori: item.kategori,
+        nominal: isIncome ? item.nominal : -item.nominal, // Signed value for expenses
         keterangan: item.keterangan,
+
+        // Consolidated ledger headers support (Nomor, Tanggal, Keterangan, Pemasukan, Pengeluaran, Saldo)
+        nomor: index + 1,
         pemasukan: pemasukan,
         pengeluaran: pengeluaran,
         saldo: runningSaldo

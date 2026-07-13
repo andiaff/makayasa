@@ -71,7 +71,7 @@ function doGet(e) {
     getOrCreateSheet(ss, "Stok Gudang", ["ID", "Tanggal", "Tipe", "Sumber/Tujuan", "Jumlah (Pack)", "Keterangan", "Sumber Input", "Hanya Sales", "Nama Sales", "Is Reversed", "Reversed At"]);
     getOrCreateSheet(ss, "Stok Sales", ["ID", "Tanggal", "Nama Sales", "Tipe", "Jumlah (Pack)", "Keterangan", "Sumber Input"]);
     getOrCreateSheet(ss, "Manajemen Freelance", ["ID", "Tanggal Ambil", "Nama Freelance", "Qty Packs", "Harga Per Pack", "Total Omset", "Status Pembayaran", "Jumlah Dibayar", "Kurang Bayar", "Keterangan"]);
-    getOrCreateSheet(ss, "Keuangan", ["Nomor", "Tanggal", "Keterangan", "Pemasukan", "Pengeluaran", "Saldo"]);
+    getOrCreateSheet(ss, "Keuangan", ["ID", "Tanggal", "Kategori", "Nominal", "Keterangan"]);
     
     if (action === "read_all") {
       const result = {};
@@ -239,7 +239,7 @@ function getTabHeaders(tabName) {
   } else if (tabName === "Manajemen Freelance") {
     return ["ID", "Tanggal Ambil", "Nama Freelance", "Qty Packs", "Harga Per Pack", "Total Omset", "Status Pembayaran", "Jumlah Dibayar", "Kurang Bayar", "Keterangan"];
   } else if (tabName === "Keuangan") {
-    return ["Nomor", "Tanggal", "Keterangan", "Pemasukan", "Pengeluaran", "Saldo"];
+    return ["ID", "Tanggal", "Kategori", "Nominal", "Keterangan"];
   }
   return [];
 }
