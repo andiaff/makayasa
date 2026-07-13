@@ -5,6 +5,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as XLSX from 'xlsx';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -198,6 +199,7 @@ export default function PembukuanKeuangan() {
   const saveExpenses = (updated: ExpenseRecord[]) => {
     setExpenses(updated);
     localStorage.setItem(STORAGE_EXPENSES_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: STORAGE_EXPENSES_KEY } }));
   };
 
   // --- ADD MANUAL EXPENSE ---
@@ -387,7 +389,7 @@ export default function PembukuanKeuangan() {
     return Array.from(cats);
   }, [consolidatedLedger]);
 
-  // --- DOWNLOAD CSV REPORT ---
+  // --- DOWNLOAD EXCEL (XLSX) REPORT ---
   const handleDownloadReport = () => {
     if (filteredLedger.length === 0) {
       triggerNotification('Tidak ada data dalam pembukuan untuk diekspor!', 'error');
@@ -395,18 +397,6 @@ export default function PembukuanKeuangan() {
     }
 
     try {
-      // Build beautiful CSV header & body
-      let csvContent = '\uFEFF'; // Add UTF-8 BOM for Microsoft Excel compatibility
-      csvContent += 'LAPORAN ARUS KAS & PEMBUKUAN KEUANGAN - MAKAYASA JAYA\n';
-      csvContent += `Tanggal Ekspor: ${new Date().toLocaleString('id-ID')}\n`;
-      csvContent += `Total Pemasukan: ${formatIDR(stats.totalPemasukan)}\n`;
-      csvContent += `Total Pengeluaran: ${formatIDR(stats.totalPengeluaran)}\n`;
-      csvContent += `Saldo Kas Bersih: ${formatIDR(stats.saldoBersih)}\n\n`;
-      
-      // Column Headers requested: nomor, tanggal, keterangan, pemasukan, pengeluaran, saldo
-      csvContent += 'Nomor,Tanggal,Keterangan,Pemasukan,Pengeluaran,Saldo\n';
-      
-      let runningSaldo = 0;
       // Sort oldest first for natural running balance calculation
       const chronologicalList = [...filteredLedger].sort((a, b) => {
         const dateCompare = a.tanggal.getTime() - b.tanggal.getTime();
@@ -414,34 +404,69 @@ export default function PembukuanKeuangan() {
         return a.id.localeCompare(b.id);
       });
 
+      const aoaData: any[][] = [
+        ['LAPORAN ARUS KAS & PEMBUKUAN KEUANGAN - MAKAYASA JAYA'],
+        [`Tanggal Ekspor: ${new Date().toLocaleString('id-ID')}`],
+        [`Total Pemasukan: ${formatIDR(stats.totalPemasukan)}`],
+        [`Total Pengeluaran: ${formatIDR(stats.totalPengeluaran)}`],
+        [`Saldo Kas Bersih: ${formatIDR(stats.saldoBersih)}`],
+        [], // Empty Row
+        ['Nomor', 'Tanggal', 'Keterangan', 'Pemasukan (Rp)', 'Pengeluaran (Rp)', 'Saldo (Rp)']
+      ];
+
+      let runningSaldo = 0;
       chronologicalList.forEach((entry, index) => {
         const isIncome = entry.tipe === 'Pemasukan';
         const nominalPemasukan = isIncome ? entry.nominal : 0;
         const nominalPengeluaran = isIncome ? 0 : entry.nominal;
         runningSaldo += (nominalPemasukan - nominalPengeluaran);
 
-        // Escape quotes to prevent CSV breakage
-        const cleanDesc = String(entry.deskripsi || '').replace(/"/g, '""');
         const formattedDate = entry.tanggal.toLocaleDateString('id-ID', {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric'
         });
-        
-        csvContent += `${index + 1},"${formattedDate}","${cleanDesc}",${nominalPemasukan},${nominalPengeluaran},${runningSaldo}\n`;
+
+        aoaData.push([
+          index + 1,
+          formattedDate,
+          entry.deskripsi || '',
+          nominalPemasukan,
+          nominalPengeluaran,
+          runningSaldo
+        ]);
       });
 
-      // Create download element
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `Laporan_Keuangan_Makayasa_${new Date().toISOString().substring(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Add empty line and summary/total rows for neatness
+      aoaData.push([]);
+      aoaData.push([
+        'TOTAL',
+        '',
+        'Jumlah Kumulatif Akhir',
+        stats.totalPemasukan,
+        stats.totalPengeluaran,
+        stats.saldoBersih
+      ]);
 
-      triggerNotification('Laporan pembukuan keuangan berhasil diunduh (Excel-friendly CSV)!', 'success');
+      const worksheet = XLSX.utils.aoa_to_sheet(aoaData);
+
+      // Set optimal column widths
+      const wscols = [
+        { wch: 8 },   // Nomor
+        { wch: 15 },  // Tanggal
+        { wch: 65 },  // Keterangan
+        { wch: 20 },  // Pemasukan
+        { wch: 20 },  // Pengeluaran
+        { wch: 22 }   // Saldo
+      ];
+      worksheet['!cols'] = wscols;
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan Keuangan');
+
+      XLSX.writeFile(workbook, `Laporan_Keuangan_Makayasa_${new Date().toISOString().substring(0, 10)}.xlsx`);
+
+      triggerNotification('Laporan pembukuan keuangan berhasil diunduh dalam format Excel (.xlsx)!', 'success');
     } catch (e: any) {
       console.error(e);
       triggerNotification('Gagal mengunduh laporan keuangan.', 'error');

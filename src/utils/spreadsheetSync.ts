@@ -111,6 +111,12 @@ export function updateLocalStatesFromData(allData: any, isManual = false): numbe
 
   // Map the fetched tab data back into corresponding localStorage keys
   Object.entries(SYNC_KEYS_MAP).forEach(([localKey, tabName]) => {
+    if (localKey === 'makayasa_expenses') {
+      // Manual expenses should only be read from Firebase/Firestore, which acts as the real database.
+      // Overwriting it from the consolidated 'Keuangan' tab of the spreadsheet (which lacks ID and category, 
+      // and consolidates multiple tables) would completely wipe out or corrupt the raw manual expenses.
+      return;
+    }
     let tabData = allData[tabName] || [];
 
     // If we are loading 'makayasa_stok_gudang', also merge with the 'Stok Sales' tab data, ensuring no duplicates by ID
