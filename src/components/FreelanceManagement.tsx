@@ -72,6 +72,8 @@ export default function FreelanceManagement({ pricePerPack = 25000 }: FreelanceM
 
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const [showArchiveConfirmModal, setShowArchiveConfirmModal] = useState<boolean>(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [recordToDelete, setRecordToDelete] = useState<{ id: string; name: string } | null>(null);
   const [archiveFilter, setArchiveFilter] = useState<'active' | 'archived' | 'all'>('active');
 
   // --- INITIAL DATA LOAD ---
@@ -424,16 +426,16 @@ export default function FreelanceManagement({ pricePerPack = 25000 }: FreelanceM
   };
 
   const handleDeleteRecord = (id: string, name: string) => {
-    if (window.confirm(`Apakah Anda yakin ingin menghapus pencatatan freelance ${name}? Transaksi yang terhubung ke Stok Gudang juga akan dihapus.`)) {
-      // 1. Remove references from warehouse stock
-      removeFromWarehouseStock(id);
-      
-      // 2. Remove the record
-      const filtered = records.filter(rec => rec.id !== id);
-      saveRecords(filtered);
-      
-      triggerNotification(`Catatan freelance ${name} telah berhasil dihapus.`, 'success');
-    }
+    // 1. Remove references from warehouse stock
+    removeFromWarehouseStock(id);
+    
+    // 2. Remove the record
+    const filtered = records.filter(rec => rec.id !== id);
+    saveRecords(filtered);
+    
+    triggerNotification(`Catatan freelance ${name} telah berhasil dihapus.`, 'success');
+    setShowDeleteModal(false);
+    setRecordToDelete(null);
   };
 
   const handleArchiveRecords = (type: 'all' | 'lunas') => {
@@ -1089,7 +1091,10 @@ export default function FreelanceManagement({ pricePerPack = 25000 }: FreelanceM
 
                           {/* Delete Button */}
                           <button
-                            onClick={() => handleDeleteRecord(rec.id, rec.namaFreelance)}
+                            onClick={() => {
+                              setRecordToDelete({ id: rec.id, name: rec.namaFreelance });
+                              setShowDeleteModal(true);
+                            }}
                             className="text-slate-400 hover:text-rose-600 p-1 hover:bg-rose-50 rounded transition-all"
                             title="Hapus Catatan"
                           >
@@ -1485,6 +1490,65 @@ export default function FreelanceManagement({ pricePerPack = 25000 }: FreelanceM
                     className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5 transition-all text-center"
                   >
                     Batal
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL 5: DELETE CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {showDeleteModal && recordToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="bg-rose-600 text-white p-4 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Trash2 className="w-5 h-5 text-white" />
+                  <div>
+                    <h4 className="text-xs font-bold">Konfirmasi Hapus Catatan</h4>
+                    <p className="text-[10px] text-rose-200">Tindakan ini tidak dapat dibatalkan</p>
+                  </div>
+                </div>
+                <button onClick={() => { setShowDeleteModal(false); setRecordToDelete(null); }} className="text-rose-200 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="bg-rose-50 text-rose-800 p-4 rounded-xl border border-rose-200 text-xs leading-relaxed space-y-2">
+                  <p className="font-extrabold flex items-center gap-1 text-rose-900">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    Peringatan Penting
+                  </p>
+                  <p className="font-semibold text-[11px]">
+                    Apakah Anda yakin ingin menghapus pencatatan freelance untuk mitra <strong className="text-rose-900 font-extrabold">{recordToDelete.name}</strong>?
+                  </p>
+                  <p className="font-medium text-[10px] text-rose-700/80">
+                    Menghapus data ini juga akan menghapus transaksi keluar masuk yang terhubung di Stok Gudang dan pembukuan terkait.
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => { setShowDeleteModal(false); setRecordToDelete(null); }}
+                    className="flex-1 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5 transition-all text-center"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteRecord(recordToDelete.id, recordToDelete.name)}
+                    className="flex-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl py-2.5 transition-all text-center shadow-lg shadow-rose-200"
+                  >
+                    Hapus Permanen
                   </button>
                 </div>
               </div>
