@@ -535,25 +535,33 @@ export function initializeFirebaseSync() {
           continue;
         }
         const localDataRaw = localStorage.getItem(localKey);
-        const localArray = localDataRaw ? JSON.parse(localDataRaw) : [];
+        let localArray = localDataRaw ? JSON.parse(localDataRaw) : [];
+
+        if (localKey === 'makayasa_sales_deposits' && Array.isArray(localArray)) {
+          localArray = localArray.filter((item: any) => !item.id || !String(item.id).startsWith('DEP-FREE-'));
+        }
 
         if (serverSnap.empty) {
           // If server collection is empty but client has local records, upload them immediately
           if (Array.isArray(localArray) && localArray.length > 0) {
             console.log(`Firebase Sync Init: Seeding server collection "${collectionName}" with ${localArray.length} local records...`);
-            await syncLocalToServer(localKey, localDataRaw);
+            await syncLocalToServer(localKey, JSON.stringify(localArray));
           }
         } else {
           // If server has records, we merge local and server records instead of a destructive overwrite.
           // This ensures that any records created on this client (e.g. sales deposits recorded offline or before syncing)
           // are safely merged and uploaded, rather than being wiped out!
-          const serverArray = serverSnap.docs.map(doc => {
+          let serverArray = serverSnap.docs.map(doc => {
             const data = doc.data();
             if (collectionName === 'expenses' && data.kategori === 'Marketing' && data.keterangan?.includes('Biaya Tester/Promosi')) {
               data.kategori = 'Biaya Tester/Promosi';
             }
             return data;
           });
+
+          if (collectionName === 'sales_deposits') {
+            serverArray = serverArray.filter((item: any) => !item.id || !String(item.id).startsWith('DEP-FREE-'));
+          }
           let mergedArray = [...localArray];
           let updated = false;
 
@@ -605,13 +613,18 @@ export function initializeFirebaseSync() {
             return;
           }
 
-          const serverData = snapshot.docs.map(doc => {
+          let serverData = snapshot.docs.map(doc => {
             const data = doc.data();
             if (collectionName === 'expenses' && data.kategori === 'Marketing' && data.keterangan?.includes('Biaya Tester/Promosi')) {
               data.kategori = 'Biaya Tester/Promosi';
             }
             return data;
           });
+
+          if (collectionName === 'sales_deposits') {
+            serverData = serverData.filter(item => !item.id || !String(item.id).startsWith('DEP-FREE-'));
+          }
+
           const currentLocalRaw = localStorage.getItem(localKey);
           const currentLocal = currentLocalRaw ? JSON.parse(currentLocalRaw) : [];
 

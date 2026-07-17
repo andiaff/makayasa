@@ -359,6 +359,27 @@ export default function App() {
     // Always write fully populated config object back to localStorage to ensure complete compatibility
     localStorage.setItem(STORAGE_CONFIG_KEY, JSON.stringify(mergedConfig));
 
+    // Self-healing: remove any duplicated or corrupted freelance records inside the local sales deposits key
+    try {
+      const savedDeposits = localStorage.getItem('makayasa_sales_deposits');
+      if (savedDeposits) {
+        const parsed = JSON.parse(savedDeposits);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter((item: any) => !item.id || !String(item.id).startsWith('DEP-FREE-'));
+          if (cleaned.length !== parsed.length) {
+            console.log(`[Self-Healing] Cleaning up ${parsed.length - cleaned.length} corrupted freelance entries from local sales deposits.`);
+            localStorage.setItem('makayasa_sales_deposits', JSON.stringify(cleaned));
+            // Trigger synchronization update events so UI updates instantly
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: 'makayasa_sales_deposits' } }));
+            }, 500);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[Self-Healing] Error cleaning freelance records from sales deposits:', e);
+    }
+
     // Load active login session
     const savedSession = localStorage.getItem(STORAGE_SESSION_KEY);
     if (savedSession) {

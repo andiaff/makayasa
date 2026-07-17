@@ -119,6 +119,11 @@ export function updateLocalStatesFromData(allData: any, isManual = false): numbe
     }
     let tabData = allData[tabName] || [];
 
+    // Filter out freelance entries from the sales deposits sheet so they don't corrupt local sales deposits state
+    if (localKey === 'makayasa_sales_deposits' && Array.isArray(tabData)) {
+      tabData = tabData.filter((item: any) => !item.id || !String(item.id).startsWith('DEP-FREE-'));
+    }
+
     // If we are loading 'makayasa_stok_gudang', also merge with the 'Stok Sales' tab data, ensuring no duplicates by ID
     if (localKey === 'makayasa_stok_gudang') {
       const salesTabData = allData['Stok Sales'] || [];

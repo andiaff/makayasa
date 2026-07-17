@@ -192,6 +192,7 @@ export default function FreelanceManagement({ pricePerPack = 25000 }: FreelanceM
   const saveRecords = (updatedRecords: FreelanceRecord[]) => {
     setRecords(updatedRecords);
     localStorage.setItem(STORAGE_FREELANCE_KEY, JSON.stringify(updatedRecords));
+    window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: STORAGE_FREELANCE_KEY } }));
   };
 
   // Get active freelance list for suggestion dropdown
